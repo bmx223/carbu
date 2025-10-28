@@ -1,0 +1,7 @@
+{
+  "name": "Faso Carburant – Équité Mali",
+  "description": "A web application to help citizens in Mali check real-time fuel availability and queue lengths in service stations, in order to avoid unnecessary travel and long waiting times during fuel shortages.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
