@@ -52,3 +52,17 @@ export interface Report {
     };
     verified?: boolean;
 }
+
+export enum IncidentType {
+  ABUSE = 'Abus (ex: favoritisme, prix non-conformes)',
+  BLACK_MARKET = 'Vente au marché noir',
+  DISPUTE = 'Dispute / Altercation',
+}
+
+export interface IncidentReport {
+  id: number;
+  stationId: number;
+  incidentType: IncidentType;
+  description: string;
+  reportedAt: Date;
+}

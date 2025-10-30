@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Station, StationStatus, QueueLength, FuelType, Report, Commune } from './types';
+import { Station, StationStatus, QueueLength, FuelType, Report, Commune, IncidentType, IncidentReport } from './types';
 import { analyzeFuelTrends } from './services/geminiService';
-import { FuelPumpIcon, MapPinIcon, ClockIcon, PlusCircleIcon, CheckBadgeIcon, ListIcon, MapIcon, CrosshairsIcon } from './components/icons';
+import { LogoIcon, MapPinIcon, ClockIcon, PlusCircleIcon, CheckBadgeIcon, ListIcon, MapIcon, CrosshairsIcon, FlagIcon, AlertIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { MapView } from './components/MapView';
 
@@ -56,6 +56,18 @@ const initialStations: Station[] = [
   { id: 34, name: 'NDC Koko Tombo', address: 'Koko Tombo', communeId: 8, communeName: 'Kati', location: { lat: 12.74, lon: -8.07 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.DIESEL]: true }, queue: QueueLength.MEDIUM, queueSize: 38, lastUpdate: new Date() },
   { id: 35, name: 'Holding Service Fouga', address: 'Fouga', communeId: 8, communeName: 'Kati', location: { lat: 12.75, lon: -8.08 }, status: StationStatus.CLOSED, fuelAvailability: {}, queue: QueueLength.NONE, lastUpdate: new Date() },
 ];
+const initialIncidents: IncidentReport[] = [
+    { id: 1, stationId: 2, incidentType: IncidentType.ABUSE, description: 'Le pompiste refuse de servir les motos.', reportedAt: new Date(Date.now() - 1 * 60 * 60 * 1000) },
+    { id: 2, stationId: 2, incidentType: IncidentType.BLACK_MARKET, description: 'Vente de carburant dans des bidons à prix élevé.', reportedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+    { id: 3, stationId: 2, incidentType: IncidentType.ABUSE, description: 'Favoritisme pour les voitures de luxe.', reportedAt: new Date(Date.now() - 30 * 60 * 1000) },
+    { id: 4, stationId: 2, incidentType: IncidentType.DISPUTE, description: 'Altercation violente dans la file.', reportedAt: new Date(Date.now() - 10 * 60 * 1000) },
+    { id: 5, stationId: 30, incidentType: IncidentType.ABUSE, description: 'Prix non conforme affiché.', reportedAt: new Date(Date.now() - 26 * 60 * 60 * 1000) },
+    { id: 6, stationId: 23, incidentType: IncidentType.ABUSE, description: 'Test', reportedAt: new Date(Date.now() - 1 * 60 * 1000) },
+    { id: 7, stationId: 23, incidentType: IncidentType.ABUSE, description: 'Test', reportedAt: new Date(Date.now() - 2 * 60 * 1000) },
+    { id: 8, stationId: 23, incidentType: IncidentType.ABUSE, description: 'Test', reportedAt: new Date(Date.now() - 3 * 60 * 1000) },
+    { id: 9, stationId: 23, incidentType: IncidentType.ABUSE, description: 'Test', reportedAt: new Date(Date.now() - 4 * 60 * 1000) },
+];
+
 
 // Helper functions for styling
 const getStatusColor = (status: StationStatus) => {
@@ -88,27 +100,31 @@ const formatTimeAgo = (date: Date): string => {
 };
 
 const Header: React.FC<{ isAuthenticated: boolean; onLogin: () => void; onLogout: () => void; }> = ({ isAuthenticated, onLogin, onLogout }) => (
-    <header className="bg-white shadow-md sticky top-0 z-20">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+    <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-20">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center space-x-3">
-                <div className="bg-mali-green p-2 rounded-full">
-                    <FuelPumpIcon className="w-8 h-8 text-mali-yellow" />
-                </div>
+                <LogoIcon className="w-12 h-12" />
                 <div>
                     <h1 className="text-xl md:text-2xl font-bold text-gray-800">Faso Carburant</h1>
                     <p className="text-xs md:text-sm text-gray-500">Équité Mali</p>
                 </div>
             </div>
-            <button onClick={isAuthenticated ? onLogout : onLogin} className="bg-gray-800 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors text-sm">
+            <button onClick={isAuthenticated ? onLogout : onLogin} className="bg-gradient-to-r from-gray-800 to-gray-700 text-white font-semibold py-2 px-4 rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all shadow-sm hover:shadow-md transform hover:-translate-y-px text-sm">
                 {isAuthenticated ? 'Se déconnecter' : 'Espace Propriétaire'}
             </button>
         </div>
     </header>
 );
 
-const StationCard: React.FC<{ station: Station; }> = ({ station }) => (
-    <div className="bg-white rounded-2xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300">
-        <div className={`p-5 border-l-8 ${station.status === StationStatus.AVAILABLE ? 'border-mali-green' : station.status === StationStatus.UNAVAILABLE ? 'border-mali-red' : 'border-gray-400'}`}>
+const StationCard: React.FC<{ station: Station; onReport: (station: Station) => void; incidentCount: number; }> = ({ station, onReport, incidentCount }) => (
+    <div className="bg-white rounded-2xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 flex flex-col">
+        {incidentCount > 3 && (
+            <div className="p-2 bg-mali-red/10 text-mali-red text-sm font-semibold flex items-center gap-2 border-b-2 border-mali-red/20">
+                <AlertIcon className="w-5 h-5 shrink-0" />
+                <span>Zone à Problèmes ({incidentCount} signalements)</span>
+            </div>
+        )}
+        <div className={`p-5 border-l-8 ${station.status === StationStatus.AVAILABLE ? 'border-mali-green' : station.status === StationStatus.UNAVAILABLE ? 'border-mali-red' : 'border-gray-400'} flex-grow`}>
             {station.verified && (
                 <div className="flex items-center gap-1.5 text-xs text-mali-green font-semibold mb-2 bg-mali-green/10 px-2 py-1 rounded-full w-fit">
                     <CheckBadgeIcon className="w-4 h-4" />
@@ -141,6 +157,10 @@ const StationCard: React.FC<{ station: Station; }> = ({ station }) => (
                 <div className="flex items-center">
                     <ClockIcon className="w-4 h-4 mr-1.5" /> <span>Dernière MàJ: {formatTimeAgo(station.lastUpdate)}</span>
                 </div>
+                <button onClick={() => onReport(station)} className="flex items-center gap-1.5 font-semibold text-mali-red hover:text-red-700 transition-colors">
+                    <FlagIcon className="w-4 h-4" />
+                    Signaler
+                </button>
             </div>
         </div>
     </div>
@@ -393,6 +413,151 @@ const AddStationModal: React.FC<{
     );
 };
 
+interface ReportIncidentData {
+    stationId: number;
+    incidentType: IncidentType;
+    description: string;
+}
+
+const ReportIncidentModal: React.FC<{
+    station: Station | null;
+    isOpen: boolean;
+    onClose: () => void;
+    onSubmit: (data: ReportIncidentData) => void;
+}> = ({ station, isOpen, onClose, onSubmit }) => {
+    const [incidentType, setIncidentType] = useState<IncidentType>(IncidentType.ABUSE);
+    const [description, setDescription] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setIncidentType(IncidentType.ABUSE);
+            setDescription('');
+        }
+    }, [isOpen]);
+
+    if (!isOpen || !station) return null;
+
+    const handleSubmit = () => {
+        if (!description) {
+            alert("Veuillez fournir une description de l'incident.");
+            return;
+        }
+        onSubmit({
+            stationId: station.id,
+            incidentType,
+            description,
+        });
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-md animate-fade-in-up">
+                <h2 className="text-2xl font-bold text-gray-800">Signaler un incident</h2>
+                <p className="text-gray-600 mt-1">Station: {station.name}</p>
+                <div className="space-y-6 mt-6">
+                    <div>
+                        <label className="font-semibold text-gray-700">Type d'incident</label>
+                        <select value={incidentType} onChange={(e) => setIncidentType(e.target.value as IncidentType)} className="mt-2 block w-full p-3 bg-gray-100 border-transparent rounded-lg focus:ring-mali-yellow focus:border-mali-yellow">
+                            {Object.values(IncidentType).map(type => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="font-semibold text-gray-700">Description</label>
+                        <textarea
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            className="mt-2 block w-full p-3 bg-gray-100 border-transparent rounded-lg focus:ring-mali-yellow focus:border-mali-yellow"
+                            rows={4}
+                            placeholder="Décrivez ce que vous avez observé..."
+                        ></textarea>
+                    </div>
+                </div>
+                <div className="mt-8 flex justify-end space-x-3">
+                    <button onClick={onClose} className="px-6 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors">Annuler</button>
+                    <button onClick={handleSubmit} className="px-6 py-2.5 bg-mali-red text-white font-semibold rounded-lg hover:bg-red-700 transition-colors">Envoyer le rapport</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const GlobalReportIncidentModal: React.FC<{
+    stations: Station[];
+    isOpen: boolean;
+    onClose: () => void;
+    onSubmit: (data: ReportIncidentData) => void;
+}> = ({ stations, isOpen, onClose, onSubmit }) => {
+    const [stationId, setStationId] = useState<number | ''>('');
+    const [incidentType, setIncidentType] = useState<IncidentType>(IncidentType.ABUSE);
+    const [description, setDescription] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setStationId('');
+            setIncidentType(IncidentType.ABUSE);
+            setDescription('');
+        }
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    const handleSubmit = () => {
+        if (!stationId) {
+            alert("Veuillez sélectionner une station.");
+            return;
+        }
+        if (!description) {
+            alert("Veuillez fournir une description de l'incident.");
+            return;
+        }
+        onSubmit({
+            stationId: Number(stationId),
+            incidentType,
+            description,
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-md animate-fade-in-up">
+                <h2 className="text-2xl font-bold text-gray-800">Signaler un incident</h2>
+                <p className="text-gray-600 mt-1">Aidez-nous à maintenir l'équité pour tous.</p>
+                <div className="space-y-6 mt-6 max-h-[60vh] overflow-y-auto pr-2">
+                    <div>
+                        <label className="font-semibold text-gray-700">Station concernée</label>
+                        <select value={stationId} onChange={(e) => setStationId(Number(e.target.value))} className="mt-2 block w-full p-3 bg-gray-100 border-transparent rounded-lg focus:ring-mali-yellow focus:border-mali-yellow">
+                            <option value="" disabled>-- Sélectionnez une station --</option>
+                            {stations.sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.id} value={s.id}>{s.name} - {s.communeName}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="font-semibold text-gray-700">Type d'incident</label>
+                        <select value={incidentType} onChange={(e) => setIncidentType(e.target.value as IncidentType)} className="mt-2 block w-full p-3 bg-gray-100 border-transparent rounded-lg focus:ring-mali-yellow focus:border-mali-yellow">
+                            {Object.values(IncidentType).map(type => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="font-semibold text-gray-700">Description</label>
+                        <textarea
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            className="mt-2 block w-full p-3 bg-gray-100 border-transparent rounded-lg focus:ring-mali-yellow focus:border-mali-yellow"
+                            rows={4}
+                            placeholder="Décrivez ce que vous avez observé..."
+                        ></textarea>
+                    </div>
+                </div>
+                <div className="mt-8 flex justify-end space-x-3">
+                    <button onClick={onClose} className="px-6 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors">Annuler</button>
+                    <button onClick={handleSubmit} className="px-6 py-2.5 bg-mali-red text-white font-semibold rounded-lg hover:bg-red-700 transition-colors">Envoyer le rapport</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 const ViewSwitcher: React.FC<{ view: 'list' | 'map', setView: (view: 'list' | 'map') => void }> = ({ view, setView }) => (
     <div className="p-1 bg-gray-200 rounded-xl flex w-fit">
         <button onClick={() => setView('list')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${view === 'list' ? 'bg-white text-gray-800 shadow' : 'bg-transparent text-gray-500'}`}>
@@ -403,6 +568,18 @@ const ViewSwitcher: React.FC<{ view: 'list' | 'map', setView: (view: 'list' | 'm
         </button>
     </div>
 );
+
+const FloatingActionButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
+    <button
+      onClick={onClick}
+      className="fixed bottom-6 right-6 bg-mali-red text-white rounded-full p-4 shadow-lg hover:bg-red-700 transition-transform transform hover:scale-110 z-30 flex items-center gap-2 animate-fade-in-up"
+      aria-label="Signaler un abus"
+    >
+      <span className="text-2xl" role="img" aria-label="Police car light emoji">🚨</span>
+      <span className="font-semibold hidden sm:block">Signaler un Abus</span>
+    </button>
+);
+
 
 export default function App() {
     const [stations, setStations] = useState<Station[]>(initialStations);
@@ -416,6 +593,10 @@ export default function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [ownerStationIds, setOwnerStationIds] = useState([1, 4]); // IDs des stations appartenant au propriétaire
     const [highlightedStationId, setHighlightedStationId] = useState<number | null>(null);
+    const [isReportModalOpen, setReportModalOpen] = useState(false);
+    const [stationToReport, setStationToReport] = useState<Station | null>(null);
+    const [isGlobalReportModalOpen, setGlobalReportModalOpen] = useState(false);
+    const [incidentReports, setIncidentReports] = useState<IncidentReport[]>(initialIncidents);
 
     const handleLogin = () => { setIsAuthenticated(true); setView('owner'); };
     const handleLogout = () => { setIsAuthenticated(false); setView('dashboard'); };
@@ -426,8 +607,32 @@ export default function App() {
     const handleOpenAddStationModal = () => setAddStationModalOpen(true);
     const handleCloseAddStationModal = () => setAddStationModalOpen(false);
 
+    const handleOpenReportModal = (station: Station) => {
+        setStationToReport(station);
+        setReportModalOpen(true);
+    };
+    const handleCloseReportModal = () => {
+        setStationToReport(null);
+        setReportModalOpen(false);
+    };
+
+    const handleOpenGlobalReportModal = () => setGlobalReportModalOpen(true);
+    const handleCloseGlobalReportModal = () => setGlobalReportModalOpen(false);
+
     const handleEditSubmit = (report: Report) => {
         setStations(prev => prev.map(s => s.id === report.stationId ? { ...s, ...report, lastUpdate: new Date(), verified: isAuthenticated } : s));
+    };
+    
+    const handleReportSubmit = (data: ReportIncidentData) => {
+        const newReport: IncidentReport = {
+            id: Date.now(),
+            reportedAt: new Date(),
+            ...data,
+        };
+        setIncidentReports(prev => [...prev, newReport]);
+        alert("Votre rapport a été envoyé. Merci pour votre contribution à l'équité !");
+        handleCloseReportModal();
+        handleCloseGlobalReportModal();
     };
 
     const handleAddStationSubmit = (newStationData: NewStationData) => {
@@ -459,6 +664,11 @@ export default function App() {
         } catch (error) { setTrendAnalysis("Erreur lors de l'analyse."); } 
         finally { setIsAnalyzing(false); }
     }, [stations]);
+
+    const getActiveIncidentCount = useCallback((stationId: number) => {
+        const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000;
+        return incidentReports.filter(r => r.stationId === stationId && r.reportedAt.getTime() > fourHoursAgo).length;
+    }, [incidentReports]);
     
     const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
       const dx = lat2 - lat1;
@@ -501,11 +711,10 @@ export default function App() {
     const ownerStations = stations.filter(s => ownerStationIds.includes(s.id));
 
     return (
-        <div className="bg-gray-50 min-h-screen font-sans">
+        <div className="min-h-screen font-sans">
             <Header isAuthenticated={isAuthenticated} onLogin={handleLogin} onLogout={handleLogout} />
             <main className="container mx-auto p-4 md:p-6">
-                {view === 'owner' && <OwnerDashboard stations={ownerStations} onEdit={handleOpenEditModal} onAddStation={handleOpenAddStationModal} onVerify={handleVerifyStation} />}
-                {view === 'dashboard' && <Dashboard stations={stations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis}/>}
+                {view === 'dashboard' && <Dashboard stations={stations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis} incidentReports={incidentReports} />}
                 
                 {(view === 'list' || view === 'map') && (
                     <div>
@@ -534,15 +743,19 @@ export default function App() {
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {filteredStations.length > 0 ? (filteredStations.map(s => (<StationCard key={s.id} station={s} />))) : (<div className="col-span-full text-center py-12 bg-white rounded-2xl shadow-lg"><p className="text-gray-500">Aucune station ne correspond à votre filtre.</p></div>)}
+                                    {filteredStations.length > 0 ? (filteredStations.map(s => (<StationCard key={s.id} station={s} onReport={handleOpenReportModal} incidentCount={getActiveIncidentCount(s.id)} />))) : (<div className="col-span-full text-center py-12 bg-white rounded-2xl shadow-lg"><p className="text-gray-500">Aucune station ne correspond à votre filtre.</p></div>)}
                                 </div>
                             </div>
                         )}
                     </div>
                 )}
+                {view === 'owner' && <OwnerDashboard stations={ownerStations} onEdit={handleOpenEditModal} onAddStation={handleOpenAddStationModal} onVerify={handleVerifyStation} />}
             </main>
+            {(view === 'dashboard' || view === 'list' || view === 'map') && <FloatingActionButton onClick={handleOpenGlobalReportModal} />}
             <EditStationModal station={selectedStation} isOpen={isEditModalOpen} onClose={handleCloseEditModal} onSubmit={handleEditSubmit} />
             <AddStationModal isOpen={isAddStationModalOpen} onClose={handleCloseAddStationModal} onSubmit={handleAddStationSubmit} communes={communes} />
+            <ReportIncidentModal station={stationToReport} isOpen={isReportModalOpen} onClose={handleCloseReportModal} onSubmit={handleReportSubmit} />
+            <GlobalReportIncidentModal stations={stations} isOpen={isGlobalReportModalOpen} onClose={handleCloseGlobalReportModal} onSubmit={handleReportSubmit} />
         </div>
     );
 }
