@@ -153,83 +153,116 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
     </button>
 );
 
+// Fix: Updated TrendAnalysisDisplay to correctly parse and render all sections from the Gemini API response.
 const TrendAnalysisDisplay: React.FC<{ analysis: string }> = ({ analysis }) => {
-    const sections = {
-        resume: /\*\*Résumé Global:\*\*\s*([\s\S]*?)(?=\*\*|$)/i,
-        zones: /\*\*Zones Clés:\*\*\s*([\s\S]*?)(?=\*\*|$)/i,
-        conseils: /\*\*Conseils aux Citoyens:\*\*\s*([\s\S]*?)(?=\*\*|$)/i,
-        tendance: /\*\*Tendance Générale:\*\*\s*([\s\S]*?)(?=\*\*|$)/i,
-    };
-
     const parseSection = (regex: RegExp) => {
         const match = analysis.match(regex);
         return match ? match[1].trim() : null;
     };
-    
+
     const parseList = (text: string | null) => {
         if (!text) return [];
-        return text.split(/\s*\*\s*/).map(item => item.trim()).filter(Boolean);
+        return text.split(/\s*\n\s*\*\s*/).map(item => item.trim().replace(/^\*\s*/, '')).filter(Boolean);
     };
 
-    const resume = parseSection(sections.resume);
-    const zones = parseList(parseSection(sections.zones));
-    const conseils = parseList(parseSection(sections.conseils));
-    const tendance = parseSection(sections.tendance);
+    const sections = {
+        resume: parseSection(/\*\*Résumé Global:\*\*\s*([\s\S]*?)(?=\*\*|$)/i),
+        zones_privilegier: parseList(parseSection(/\*\*Zones à Privilégier \(Meilleure Disponibilité\):\*\*\s*([\s\S]*?)(?=\*\*|$)/i)),
+        zones_tension: parseList(parseSection(/\*\*Zones sous Tension \(Disponibilité Faible\):\*\*\s*([\s\S]*?)(?=\*\*|$)/i)),
+        conseils: parseList(parseSection(/\*\*Conseils Stratégiques pour les Citoyens:\*\*\s*([\s\S]*?)(?=\*\*|$)/i)),
+        predictions: parseList(parseSection(/\*\*Prédictions à Court Terme \(Prochaines 24h\):\*\*\s*([\s\S]*?)(?=\*\*|$)/i)),
+        tendance: parseSection(/\*\*Tendance Générale:\*\*\s*([\s\S]*?)(?=\*\*|$)/i),
+    };
 
-    if (!resume && !tendance && zones.length === 0 && conseils.length === 0) {
-        return <div className="prose prose-sm max-w-none text-gray-700">{analysis.replace(/\n/g, '<br />')}</div>;
+    const hasContent = Object.values(sections).some(val => (Array.isArray(val) ? val.length > 0 : val !== null));
+
+    if (!hasContent) {
+        // Fallback for unexpected format
+        return <div className="prose prose-sm max-w-none text-gray-700" dangerouslySetInnerHTML={{ __html: analysis.replace(/\n/g, '<br />') }} />;
     }
 
     return (
-        <div className="space-y-5">
-            {resume && (
+        <div className="space-y-6">
+            {sections.resume && (
                 <div>
-                    <h4 className="flex items-center gap-2 text-md font-bold text-gray-700 mb-2">
+                    <h4 className="flex items-center gap-2 text-md font-bold text-gray-800 mb-2">
                         <InformationCircleIcon className="w-6 h-6 text-mali-green" />
                         <span>Résumé Global</span>
                     </h4>
-                    <p className="text-gray-600 pl-8">{resume}</p>
+                    <p className="text-gray-600 pl-8">{sections.resume}</p>
                 </div>
             )}
-            {zones.length > 0 && (
+            {sections.zones_privilegier.length > 0 && (
                 <div>
-                    <h4 className="flex items-center gap-2 text-md font-bold text-gray-700 mb-2">
-                        <MapPinIcon className="w-6 h-6 text-mali-yellow" />
-                        <span>Zones Clés à surveiller</span>
+                    <h4 className="flex items-center gap-2 text-md font-bold text-gray-800 mb-2">
+                        <MapPinIcon className="w-6 h-6 text-mali-green" />
+                        <span>Zones à Privilégier</span>
                     </h4>
                     <ul className="list-none space-y-1.5 pl-8">
-                        {zones.map((zone, index) => (
+                        {sections.zones_privilegier.map((zone, index) => (
                             <li key={index} className="flex items-start text-gray-600">
-                                <span className="mr-3 mt-1 text-mali-yellow shrink-0">◆</span>
+                                <span className="mr-3 mt-1.5 text-mali-green shrink-0 text-lg">✓</span>
                                 <span>{zone}</span>
                             </li>
                         ))}
                     </ul>
                 </div>
             )}
-            {conseils.length > 0 && (
-                <div>
-                    <h4 className="flex items-center gap-2 text-md font-bold text-gray-700 mb-2">
-                        <LightBulbIcon className="w-6 h-6 text-blue-500" />
-                        <span>Conseils aux Citoyens</span>
+            {sections.zones_tension.length > 0 && (
+                 <div>
+                    <h4 className="flex items-center gap-2 text-md font-bold text-gray-800 mb-2">
+                        <MapPinIcon className="w-6 h-6 text-mali-red" />
+                        <span>Zones sous Tension</span>
                     </h4>
                     <ul className="list-none space-y-1.5 pl-8">
-                        {conseils.map((conseil, index) => (
+                        {sections.zones_tension.map((zone, index) => (
+                            <li key={index} className="flex items-start text-gray-600">
+                                <span className="mr-3 mt-1.5 text-mali-red shrink-0 text-lg">✗</span>
+                                <span>{zone}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+            {sections.conseils.length > 0 && (
+                <div>
+                    <h4 className="flex items-center gap-2 text-md font-bold text-gray-800 mb-2">
+                        <LightBulbIcon className="w-6 h-6 text-blue-500" />
+                        <span>Conseils Stratégiques</span>
+                    </h4>
+                    <ul className="list-none space-y-1.5 pl-8">
+                        {sections.conseils.map((conseil, index) => (
                            <li key={index} className="flex items-start text-gray-600">
-                                <span className="mr-2 mt-1 text-blue-500 shrink-0">✓</span>
+                                <span className="mr-3 mt-1 text-blue-500 shrink-0">💡</span>
                                 <span>{conseil}</span>
                            </li>
                         ))}
                     </ul>
                 </div>
             )}
-            {tendance && (
+            {sections.predictions.length > 0 && (
                 <div>
-                     <h4 className="flex items-center gap-2 text-md font-bold text-gray-700 mb-2">
+                    <h4 className="flex items-center gap-2 text-md font-bold text-gray-800 mb-2">
+                        <ClockIcon className="w-6 h-6 text-gray-600" />
+                        <span>Prédictions (Prochaines 24h)</span>
+                    </h4>
+                    <ul className="list-none space-y-1.5 pl-8">
+                        {sections.predictions.map((prediction, index) => (
+                           <li key={index} className="flex items-start text-gray-600">
+                                <span className="mr-3 mt-1 text-gray-600 shrink-0">→</span>
+                                <span>{prediction}</span>
+                           </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+            {sections.tendance && (
+                <div>
+                     <h4 className="flex items-center gap-2 text-md font-bold text-gray-800 mb-2">
                         <ChartBarIcon className="w-6 h-6 text-purple-500" />
                         <span>Tendance Générale</span>
                     </h4>
-                    <p className="text-gray-600 font-semibold pl-8">{tendance}</p>
+                    <p className="text-gray-600 font-semibold pl-8">{sections.tendance}</p>
                 </div>
             )}
         </div>

@@ -40,6 +40,7 @@ export interface Station {
   queueSize?: number | null; // Ajout du champ pour la taille de la file
   lastUpdate: Date;
   verified?: boolean;
+  imageUrl?: string;
 }
 
 export interface Report {

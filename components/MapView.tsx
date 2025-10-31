@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { Station, StationStatus, QueueLength } from '../types';
 import { MapPinIcon, ClockIcon, CrosshairsIcon, SearchIcon, PlusIcon, MinusIcon } from './icons';
 
 interface MapViewProps {
     stations: Station[];
-    highlightedStationId: number | null;
+    selectedStationId: number | null;
+    onSelectStation: (id: number | null) => void;
     onFindNearby: () => void;
 }
 
@@ -58,12 +60,12 @@ const formatTimeAgo = (date: Date): string => {
     return `Il y a ${days} j`;
 };
 
-const StationPin: React.FC<{ station: Station; onSelect: (station: Station) => void; isHighlighted: boolean }> = ({ station, onSelect, isHighlighted }) => {
+const StationPin: React.FC<{ station: Station; onSelect: () => void; isHighlighted: boolean }> = ({ station, onSelect, isHighlighted }) => {
     const { top, left } = normalizeCoords(station.location.lat, station.location.lon);
     
     return (
         <button
-            onClick={() => onSelect(station)}
+            onClick={onSelect}
             className="absolute transform -translate-x-1/2 -translate-y-1/2 focus:outline-none z-10"
             style={{ top, left }}
             title={station.name}
@@ -140,8 +142,7 @@ const FilterButton: React.FC<{ active: boolean; onClick: () => void; children: R
 );
 
 
-export const MapView: React.FC<MapViewProps> = ({ stations, highlightedStationId, onFindNearby }) => {
-    const [selectedStation, setSelectedStation] = useState<Station | null>(null);
+export const MapView: React.FC<MapViewProps> = ({ stations, selectedStationId, onSelectStation, onFindNearby }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [zoomLevel, setZoomLevel] = useState(3); // Zoom scale 1 (out) to 5 (in)
     const [availabilityFilter, setAvailabilityFilter] = useState<'all' | StationStatus.AVAILABLE>('all');
@@ -149,7 +150,6 @@ export const MapView: React.FC<MapViewProps> = ({ stations, highlightedStationId
 
     const handleZoomIn = () => setZoomLevel(z => Math.min(z + 1, 5));
     const handleZoomOut = () => setZoomLevel(z => Math.max(z - 1, 1));
-    const handleSelectStation = (station: Station) => setSelectedStation(station);
 
     const filteredStations = useMemo(() =>
         stations.filter(s => {
@@ -164,11 +164,32 @@ export const MapView: React.FC<MapViewProps> = ({ stations, highlightedStationId
         }),
     [stations, searchTerm, availabilityFilter, queueFilter]);
 
-    const clusteredData = useMemo(() => {
-        const ZOOM_LEVEL_DISTANCE_MAP: { [key: number]: number } = { 1: 15, 2: 10, 3: 7, 4: 4, 5: 0 };
-        const clusterDistance = ZOOM_LEVEL_DISTANCE_MAP[zoomLevel];
+    useEffect(() => {
+        // If there's a selected station but it's no longer in the filtered list, deselect it.
+        if (selectedStationId && !filteredStations.some(s => s.id === selectedStationId)) {
+            onSelectStation(null);
+        }
+    }, [filteredStations, selectedStationId, onSelectStation]);
 
-        if (clusterDistance === 0) return filteredStations;
+    const clusteredData = useMemo(() => {
+        // Defines the parameters for the clustering curve.
+        // MAX_CLUSTER_DISTANCE: The largest distance between two points to be considered in the same cluster (at minimum zoom).
+        // MIN_ZOOM / MAX_ZOOM: The range of zoom levels.
+        // EXPONENT: Controls the rate at which clustering decreases as zoom increases. >1 means faster decrease.
+        const MAX_CLUSTER_DISTANCE = 20;
+        const MIN_ZOOM = 1;
+        const MAX_ZOOM = 5;
+        const EXPONENT = 1.5;
+
+        // A dynamic, non-linear calculation for cluster distance.
+        // As zoomLevel increases, clusterDistance decreases exponentially, leading to fewer, larger clusters when zoomed out,
+        // and more, smaller clusters (or individual points) when zoomed in.
+        const clusterDistance = MAX_CLUSTER_DISTANCE * Math.pow(
+            (MAX_ZOOM - zoomLevel) / (MAX_ZOOM - MIN_ZOOM),
+            EXPONENT
+        );
+
+        if (zoomLevel >= MAX_ZOOM) return filteredStations; // No clustering at the highest zoom level.
 
         const points = filteredStations.map(s => ({ ...s, pos: normalizeCoords(s.location.lat, s.location.lon) }));
         const clusteredIds = new Set<number>();
@@ -206,6 +227,11 @@ export const MapView: React.FC<MapViewProps> = ({ stations, highlightedStationId
         }
         return finalData;
     }, [filteredStations, zoomLevel]);
+    
+    const selectedStationForPopup = useMemo(() => 
+        stations.find(s => s.id === selectedStationId), 
+        [stations, selectedStationId]
+    );
 
     return (
         <div className="relative w-full h-[60vh] md:h-[70vh] bg-gray-200 rounded-2xl shadow-lg overflow-hidden border-4 border-white">
@@ -257,10 +283,10 @@ export const MapView: React.FC<MapViewProps> = ({ stations, highlightedStationId
                     return <ClusterPin key={item.id} cluster={item} onZoomIn={handleZoomIn} />;
                 }
                 const station = item as Station; // Type assertion for Station
-                return <StationPin key={station.id} station={station} onSelect={handleSelectStation} isHighlighted={station.id === highlightedStationId} />;
+                return <StationPin key={station.id} station={station} onSelect={() => onSelectStation(station.id)} isHighlighted={station.id === selectedStationId} />;
             })}
 
-            {selectedStation && <InfoPopup station={selectedStation} onClose={() => setSelectedStation(null)} />}
+            {selectedStationForPopup && <InfoPopup station={selectedStationForPopup} onClose={() => onSelectStation(null)} />}
             
             <button
                 onClick={onFindNearby}
