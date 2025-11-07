@@ -20,6 +20,7 @@ export enum StationStatus {
   AVAILABLE = 'Disponible',
   UNAVAILABLE = 'Rupture de stock',
   CLOSED = 'Fermée',
+  PENDING_VALIDATION = 'En attente de Validation',
 }
 
 export interface Station {
@@ -65,5 +66,25 @@ export interface IncidentReport {
   stationId: number;
   incidentType: IncidentType;
   description: string;
+  reportedAt: Date;
+}
+
+// Types for the new Integrity Alert module
+export enum FraudType {
+  ABUSIVE_PRICING = 'Prix Abusif (Spéculation)',
+  FAVORITISM = 'Favoritisme (Vente aux proches)',
+  STOCK_RETENTION = 'Rétention de Stock (Cacher le carburant)',
+  OTHER = 'Autres',
+}
+
+export interface IntegrityReport {
+  id: number;
+  stationId: number;
+  fraudTypes: { [key in FraudType]?: boolean };
+  otherFraudDescription?: string;
+  observationDateTime: string;
+  description: string;
+  isAnonymous: boolean;
+  contactInfo?: string;
   reportedAt: Date;
 }

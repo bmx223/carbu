@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { Station, Commune, StationStatus, IncidentReport, IncidentType } from '../types';
-import { ListIcon, MapIcon, SparklesIcon, AlertIcon, ChartBarIcon, CrosshairsIcon, FlagIcon, ClockIcon, InformationCircleIcon, LightBulbIcon, MapPinIcon } from './icons';
+import { ListIcon, MapIcon, SparklesIcon, AlertIcon, ChartBarIcon, CrosshairsIcon, FlagIcon, ClockIcon, InformationCircleIcon, LightBulbIcon, MapPinIcon, ShieldCheckIcon } from './icons';
 
 interface DashboardProps {
     stations: Station[];
@@ -13,6 +12,7 @@ interface DashboardProps {
     isAnalyzing: boolean;
     trendAnalysis: string | null;
     incidentReports: IncidentReport[];
+    onOpenIntegrityReportModal: () => void;
 }
 
 const formatTimeAgo = (date: Date): string => {
@@ -270,7 +270,7 @@ const TrendAnalysisDisplay: React.FC<{ analysis: string }> = ({ analysis }) => {
 };
 
 
-export const Dashboard: React.FC<DashboardProps> = ({ stations, communes, onNavigateToList, onNavigateToMap, onFindNearby, onAnalyze, isAnalyzing, trendAnalysis, incidentReports }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ stations, communes, onNavigateToList, onNavigateToMap, onFindNearby, onAnalyze, isAnalyzing, trendAnalysis, incidentReports, onOpenIntegrityReportModal }) => {
     const [activeTab, setActiveTab] = useState<'overview' | 'communes' | 'incidents'>('overview');
     
     const availableStationsCount = stations.filter(s => s.status === StationStatus.AVAILABLE).length;
@@ -311,6 +311,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ stations, communes, onNavi
                         <section className="grid md:grid-cols-2 gap-6">
                             <GlobalStatusCard percentage={availablePercentage} stationCount={availableStationsCount} totalStations={totalStationsCount}/>
                             <QuickActionsCard onNavigateToList={onNavigateToList} onNavigateToMap={onNavigateToMap} onFindNearby={onFindNearby} />
+                        </section>
+
+                        <section>
+                            <div className="bg-white p-6 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
+                                <div className="flex items-center gap-4 text-left">
+                                    <ShieldCheckIcon className="w-10 h-10 text-blue-600 shrink-0"/>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-gray-800">Alerte Intégrité</h3>
+                                        <p className="text-sm text-gray-500 mt-1">Signalez une fraude ou un favoritisme de manière sécurisée.</p>
+                                    </div>
+                                </div>
+                                <button onClick={onOpenIntegrityReportModal} className="w-full md:w-auto bg-blue-600 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:bg-blue-700 transition-all shrink-0">
+                                    Faire un signalement
+                                </button>
+                            </div>
                         </section>
 
                         <section className="bg-white p-6 rounded-2xl shadow-lg">

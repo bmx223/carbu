@@ -1,19 +1,21 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Station, StationStatus, QueueLength } from '../types';
-import { MapPinIcon, ClockIcon, CrosshairsIcon, SearchIcon, PlusIcon, MinusIcon } from './icons';
+import { MapPinIcon, ClockIcon, CrosshairsIcon, SearchIcon, PlusIcon, MinusIcon, FlagIcon } from './icons';
 
 interface MapViewProps {
     stations: Station[];
     selectedStationId: number | null;
     onSelectStation: (id: number | null) => void;
     onFindNearby: () => void;
+    onOpenIncidentReportModal: () => void;
 }
 
 interface Cluster {
   id: string;
   stations: Station[];
   center: { lat: number; lon: number };
+  availabilityPercentage: number;
 }
 
 // Bounding box for Bamako for coordinate normalization
@@ -76,15 +78,21 @@ const StationPin: React.FC<{ station: Station; onSelect: () => void; isHighlight
     )
 };
 
+const getClusterColor = (percentage: number) => {
+    if (percentage > 66) return 'from-mali-green to-green-500';
+    if (percentage > 33) return 'from-mali-yellow to-yellow-500';
+    return 'from-mali-red to-red-500';
+};
+
 const ClusterPin: React.FC<{ cluster: Cluster, onZoomIn: () => void }> = ({ cluster, onZoomIn }) => {
     const { top, left } = normalizeCoords(cluster.center.lat, cluster.center.lon);
-    const size = 36 + Math.log2(cluster.stations.length) * 4;
+    const size = Math.min(64, 32 + cluster.stations.length * 2);
     return (
         <button
             onClick={onZoomIn}
-            className="absolute transform -translate-x-1/2 -translatey-1/2 rounded-full bg-gradient-to-br from-mali-yellow to-mali-red text-white font-bold flex items-center justify-center shadow-lg hover:scale-110 transition-transform duration-200 z-10"
+            className={`absolute transform -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br ${getClusterColor(cluster.availabilityPercentage)} text-white font-bold flex items-center justify-center shadow-lg hover:scale-110 transition-all duration-200 z-10`}
             style={{ top, left, width: `${size}px`, height: `${size}px`, fontSize: `${12 + Math.log2(cluster.stations.length)}px` }}
-            title={`${cluster.stations.length} stations`}
+            title={`${cluster.stations.length} stations (${Math.round(cluster.availabilityPercentage)}% dispo.)`}
         >
             {cluster.stations.length}
         </button>
@@ -142,7 +150,7 @@ const FilterButton: React.FC<{ active: boolean; onClick: () => void; children: R
 );
 
 
-export const MapView: React.FC<MapViewProps> = ({ stations, selectedStationId, onSelectStation, onFindNearby }) => {
+export const MapView: React.FC<MapViewProps> = ({ stations, selectedStationId, onSelectStation, onFindNearby, onOpenIncidentReportModal }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [zoomLevel, setZoomLevel] = useState(3); // Zoom scale 1 (out) to 5 (in)
     const [availabilityFilter, setAvailabilityFilter] = useState<'all' | StationStatus.AVAILABLE>('all');
@@ -216,10 +224,15 @@ export const MapView: React.FC<MapViewProps> = ({ stations, selectedStationId, o
                 clusterMembers.forEach(m => clusteredIds.add(m.id));
                 const centerLat = clusterMembers.reduce((sum, s) => sum + s.location.lat, 0) / clusterMembers.length;
                 const centerLon = clusterMembers.reduce((sum, s) => sum + s.location.lon, 0) / clusterMembers.length;
+                
+                const availableCount = clusterMembers.filter(s => s.status === StationStatus.AVAILABLE).length;
+                const availabilityPercentage = (availableCount / clusterMembers.length) * 100;
+                
                 finalData.push({
                     id: `cluster-${centerLat}-${centerLon}`,
                     stations: clusterMembers.map(({pos, ...rest}) => rest),
-                    center: { lat: centerLat, lon: centerLon }
+                    center: { lat: centerLat, lon: centerLon },
+                    availabilityPercentage: availabilityPercentage,
                 });
             } else {
                 finalData.push(point);
@@ -289,11 +302,19 @@ export const MapView: React.FC<MapViewProps> = ({ stations, selectedStationId, o
             {selectedStationForPopup && <InfoPopup station={selectedStationForPopup} onClose={() => onSelectStation(null)} />}
             
             <button
+                onClick={onOpenIncidentReportModal}
+                className="absolute bottom-4 left-4 flex items-center gap-2 bg-mali-red text-white font-bold p-3 sm:py-2 sm:px-4 rounded-full shadow-2xl border-2 border-white/50 hover:bg-red-700 transition-all transform hover:scale-105 z-10"
+            >
+                <FlagIcon className="w-5 h-5"/>
+                <span className="hidden sm:inline">Signaler un Incident</span>
+            </button>
+            
+            <button
                 onClick={onFindNearby}
-                className="absolute bottom-4 right-4 flex items-center gap-2 bg-white text-gray-800 font-bold py-2 px-4 rounded-full shadow-2xl border-2 border-transparent hover:border-mali-green transition-all transform hover:scale-105 z-10"
+                className="absolute bottom-4 right-4 flex items-center gap-2 bg-white text-gray-800 font-bold p-3 sm:py-2 sm:px-4 rounded-full shadow-2xl border-2 border-transparent hover:border-mali-green transition-all transform hover:scale-105 z-10"
             >
                 <CrosshairsIcon className="w-5 h-5"/>
-                Près de moi
+                <span className="hidden sm:inline">Près de moi</span>
             </button>
         </div>
     );

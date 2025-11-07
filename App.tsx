@@ -1,12 +1,15 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Station, StationStatus, QueueLength, FuelType, Report, Commune, IncidentType, IncidentReport } from './types';
+import { Station, StationStatus, QueueLength, FuelType, Report, Commune, IncidentType, IncidentReport, IntegrityReport } from './types';
 import { analyzeFuelTrends } from './services/geminiService';
-import { LogoIcon, MapPinIcon, ClockIcon, PlusCircleIcon, CheckBadgeIcon, ListIcon, MapIcon, CrosshairsIcon, FlagIcon, AlertIcon, DocumentTextIcon, ShieldCheckIcon, KeyIcon } from './components/icons';
+import { LogoIcon, MapPinIcon, ClockIcon, PlusCircleIcon, CheckBadgeIcon, ListIcon, MapIcon, CrosshairsIcon, FlagIcon, AlertIcon, DocumentTextIcon, ShieldCheckIcon, KeyIcon, UserShieldIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { MapView } from './components/MapView';
-// Fix: Corrected import to use a named import for OwnerPortal as it is not a default export.
+import { StationList } from './components/StationList';
+import { IntegrityReportModal } from './components/IntegrityReportModal';
+import { IncidentReportModal } from './components/IncidentReportModal';
 import { OwnerPortal } from "./OwnerPortal";
+import { AdminPortal } from './components/AdminPortal';
 
 // Mock Data
 const communes: Commune[] = [
@@ -54,7 +57,8 @@ const MobileMenu: React.FC<{
     onClose: () => void;
     onNavigate: (view: View) => void;
     onOpenOwnerPortal: () => void;
-}> = ({ onClose, onNavigate, onOpenOwnerPortal }) => {
+    onOpenAdminPortal: () => void;
+}> = ({ onClose, onNavigate, onOpenOwnerPortal, onOpenAdminPortal }) => {
     return (
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true"></div>
@@ -68,12 +72,19 @@ const MobileMenu: React.FC<{
                     <button onClick={() => onNavigate('map')} className="text-left text-lg font-semibold text-gray-700 hover:text-mali-green p-2 rounded-lg transition-colors">Carte</button>
                     <button onClick={() => onNavigate('list')} className="text-left text-lg font-semibold text-gray-700 hover:text-mali-green p-2 rounded-lg transition-colors">Liste des Stations</button>
                     <div className="pt-4 border-t border-gray-200"></div>
-                    <button 
+                    <button
                         onClick={onOpenOwnerPortal}
                         className="flex items-center gap-3 text-left text-lg font-semibold text-yellow-800 bg-yellow-300 p-3 rounded-lg transition-colors hover:bg-yellow-400"
                     >
                         <KeyIcon className="w-6 h-6"/>
                         Espace Propriétaire
+                    </button>
+                     <button
+                        onClick={onOpenAdminPortal}
+                        className="flex items-center gap-3 text-left text-lg font-semibold text-blue-800 bg-blue-200 p-3 rounded-lg transition-colors hover:bg-blue-300"
+                    >
+                        <UserShieldIcon className="w-6 h-6"/>
+                        Mode Admin
                     </button>
                 </nav>
             </div>
@@ -90,8 +101,24 @@ const App: React.FC = () => {
     const [incidentReports, setIncidentReports] = useState<IncidentReport[]>(mockIncidents);
     const [isOwnerFlowActive, setIsOwnerFlowActive] = useState(false);
     const [managedStation, setManagedStation] = useState<Station | null>(null);
+    const [isAddingStation, setIsAddingStation] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isIntegrityReportModalOpen, setIsIntegrityReportModalOpen] = useState(false);
+    const [integrityReports, setIntegrityReports] = useState<IntegrityReport[]>([]);
+    const [isIncidentReportModalOpen, setIsIncidentReportModalOpen] = useState(false);
+    const [isAdminMode, setIsAdminMode] = useState(false);
+    const [toast, setToast] = useState<{ message: string; key: number } | null>(null);
 
+    useEffect(() => {
+        if (toast) {
+            const timer = setTimeout(() => setToast(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [toast]);
+
+    const showToast = (message: string) => {
+        setToast({ message, key: Date.now() });
+    };
 
     const handleAnalyze = async () => {
         setIsAnalyzing(true);
@@ -128,19 +155,70 @@ const App: React.FC = () => {
                     : station
             )
         );
-        alert('Statut mis à jour en direct !');
+        const time = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        showToast(`Statut mis à jour avec succès à ${time}.`);
     };
 
     const handleSubmitForReview = (stationId: number, changes: any) => {
         console.log("Changes submitted for review for station", stationId, changes);
-        alert("Vos modifications ont été soumises pour validation. Elles seront appliquées après vérification par nos équipes.");
+        showToast("Vos modifications ont été soumises pour validation.");
         // In a real app, this would send data to a backend.
         handleClosePortal();
     };
+
+    const handleAddNewStationRequest = (newStationData: any) => {
+        const parsedCommuneId = parseInt(newStationData.communeId, 10);
+        const newStation: Station = {
+            id: Date.now(), // Use timestamp for a unique ID in this mock setup
+            name: newStationData.name,
+            address: newStationData.address,
+            communeId: parsedCommuneId,
+            communeName: communes.find(c => c.id === parsedCommuneId)?.name || '',
+            location: {
+                lat: parseFloat(newStationData.location.lat),
+                lon: parseFloat(newStationData.location.lon),
+            },
+            status: StationStatus.PENDING_VALIDATION,
+            fuelAvailability: newStationData.fuelAvailability,
+            queue: QueueLength.NONE,
+            queueSize: 0,
+            lastUpdate: new Date(),
+            verified: false,
+            imageUrl: newStationData.imageUrl,
+        };
+        setStations(prev => [...prev, newStation]);
+        showToast("Station soumise avec succès. Elle sera visible publiquement après vérification par notre équipe (Mode Admin).");
+        handleClosePortal();
+    };
     
+    const handleIntegrityReportSubmit = (reportData: Omit<IntegrityReport, 'id' | 'reportedAt'>) => {
+        const newReport: IntegrityReport = {
+            ...reportData,
+            id: Date.now(),
+            reportedAt: new Date(),
+        };
+        setIntegrityReports(prev => [...prev, newReport]);
+        setIsIntegrityReportModalOpen(false);
+        showToast("Signalement envoyé. Merci pour votre contribution.");
+        // The console.log simulates the data being sent to a secure backend, it is not displayed in the UI.
+        console.log("New Integrity Report Submitted (for moderation view only):", newReport);
+    };
+
+    const handleIncidentReportSubmit = (reportData: Omit<IncidentReport, 'id' | 'reportedAt'>) => {
+        const newReport: IncidentReport = {
+            ...reportData,
+            id: Date.now(),
+            reportedAt: new Date(),
+        };
+        setIncidentReports(prev => [newReport, ...prev]);
+        setIsIncidentReportModalOpen(false);
+        showToast("Signalement d'incident envoyé. Merci.");
+    };
+
     const handleClosePortal = () => {
         setManagedStation(null);
         setIsOwnerFlowActive(false);
+        setIsAddingStation(false);
     };
 
     const handleMobileNavigate = (targetView: View) => {
@@ -153,6 +231,30 @@ const App: React.FC = () => {
         setIsMobileMenuOpen(false);
     };
 
+    const handleOpenAdminPortalFromMobile = () => {
+        setIsAdminMode(true);
+        setIsMobileMenuOpen(false);
+    };
+
+    const handleSelectStationOnMap = (stationId: number) => {
+        setSelectedStationId(stationId);
+        setView('map');
+    };
+
+    const handleApproveStation = (stationId: number) => {
+        setStations(prev => prev.map(s => 
+            s.id === stationId 
+                ? { ...s, status: StationStatus.AVAILABLE, verified: true, lastUpdate: new Date() } 
+                : s
+        ));
+    };
+
+    const handleRejectStation = (stationId: number) => {
+        setStations(prev => prev.filter(s => s.id !== stationId));
+    };
+
+    const visibleStations = stations.filter(s => s.status !== StationStatus.PENDING_VALIDATION);
+
     const StationSelectorModal: React.FC = () => (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col animate-fade-in-up">
@@ -161,11 +263,20 @@ const App: React.FC = () => {
                     <button onClick={() => setIsOwnerFlowActive(false)} className="text-gray-400 hover:text-gray-600 text-3xl leading-none">&times;</button>
                 </div>
                 <div className="overflow-y-auto p-4">
+                     <div className="mb-4">
+                        <button
+                            onClick={() => { setIsAddingStation(true); setIsOwnerFlowActive(false); }}
+                            className="w-full text-left p-3 rounded-lg bg-mali-green text-white hover:bg-green-700 transition-colors flex items-center gap-3 font-semibold"
+                        >
+                            <PlusCircleIcon className="w-6 h-6"/>
+                            <span>Ajouter une nouvelle station</span>
+                        </button>
+                    </div>
                     <ul className="space-y-2">
-                        {stations.map(station => (
+                        {visibleStations.map(station => (
                             <li key={station.id}>
-                                <button 
-                                    onClick={() => setManagedStation(station)}
+                                <button
+                                    onClick={() => { setManagedStation(station); setIsOwnerFlowActive(false); }}
                                     className="w-full text-left p-3 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-4"
                                 >
                                     <img src={station.imageUrl || `https://ui-avatars.com/api/?name=${station.name.charAt(0)}&background=random`} alt={station.name} className="w-12 h-12 rounded-lg object-cover bg-gray-200 flex-shrink-0" />
@@ -181,7 +292,7 @@ const App: React.FC = () => {
             </div>
         </div>
     );
-    
+
     // Simple Header
     const Header = () => (
       <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-40">
@@ -189,100 +300,85 @@ const App: React.FC = () => {
             <LogoIcon className="w-10 h-10" />
             <div>
                 <h1 className="text-xl font-bold text-gray-800">Faso Carburant</h1>
-                <p className="text-sm text-gray-500">Info carburant en temps réel</p>
+                <p className="text-sm text-gray-500">La Boussole du Citoyen</p>
             </div>
         </div>
         <nav className="hidden md:flex items-center gap-2">
-            <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${view === 'dashboard' ? 'bg-mali-green text-white' : 'hover:bg-gray-100'}`}>Tableau de Bord</button>
-            <button onClick={() => setView('map')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${view === 'map' ? 'bg-mali-green text-white' : 'hover:bg-gray-100'}`}>Carte</button>
-            <button onClick={() => setView('list')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${view === 'list' ? 'bg-mali-green text-white' : 'hover:bg-gray-100'}`}>Liste des Stations</button>
-            <button 
-                onClick={() => setIsOwnerFlowActive(true)}
-                className="flex items-center gap-2 ml-4 px-4 py-2 rounded-lg font-semibold transition-colors bg-yellow-400 text-yellow-900 hover:bg-yellow-500"
-            >
+            <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${view === 'dashboard' ? 'bg-mali-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Tableau de Bord</button>
+            <button onClick={() => setView('map')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${view === 'map' ? 'bg-mali-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Carte</button>
+            <button onClick={() => setView('list')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${view === 'list' ? 'bg-mali-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Liste</button>
+            <div className="w-px h-6 bg-gray-200 mx-2"></div>
+            <button onClick={() => setIsOwnerFlowActive(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-yellow-800 bg-yellow-100 hover:bg-yellow-200 transition-colors">
                 <KeyIcon className="w-5 h-5"/>
                 Espace Propriétaire
             </button>
+             <button onClick={() => setIsAdminMode(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-blue-800 bg-blue-100 hover:bg-blue-200 transition-colors">
+                <UserShieldIcon className="w-5 h-5"/>
+                Mode Admin
+            </button>
         </nav>
-        <button 
-            className="md:hidden p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors" 
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            aria-label={isMobileMenuOpen ? "Fermer le menu" : "Ouvrir le menu"}
-        >
-            {isMobileMenuOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-            ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>
-            )}
-        </button>
+        <div className="md:hidden">
+            <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 rounded-md text-gray-600 hover:bg-gray-100">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </button>
+        </div>
       </header>
     );
 
-    const renderView = () => {
-        switch (view) {
-            case 'dashboard':
-                return <Dashboard 
-                            stations={stations}
-                            communes={communes}
-                            onNavigateToList={() => setView('list')}
-                            onNavigateToMap={() => setView('map')}
-                            onFindNearby={handleFindNearby}
-                            onAnalyze={handleAnalyze}
-                            isAnalyzing={isAnalyzing}
-                            trendAnalysis={trendAnalysis}
-                            incidentReports={incidentReports}
-                        />;
-            case 'map':
-                return <MapView 
-                            stations={stations} 
-                            selectedStationId={selectedStationId}
-                            onSelectStation={setSelectedStationId}
-                            onFindNearby={handleFindNearby}
-                        />;
-            case 'list':
-                // The StationList component doesn't exist. We'll show a placeholder.
-                return (
-                    <div className="text-center p-8 bg-white rounded-lg shadow-md">
-                        <h2 className="text-2xl font-bold">Liste des stations</h2>
-                        <p className="mt-2 text-gray-600">Cette fonctionnalité est en cours de développement.</p>
-                        <button onClick={() => setView('dashboard')} className="mt-4 px-6 py-2 bg-mali-green text-white font-semibold rounded-lg">Retour</button>
-                    </div>
-                );
-            default:
-                return <div>Vue non trouvée</div>;
-        }
-    };
-
     return (
-        <div className="bg-gray-50 min-h-screen font-sans">
+        <div className="font-sans bg-gray-50 min-h-screen">
             <Header />
-            <main className="p-4 md:p-8">
-                {renderView()}
+            <main>
+                 <div className="container mx-auto px-4 py-6">
+                    {view === 'dashboard' && <Dashboard stations={visibleStations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis} incidentReports={incidentReports} onOpenIntegrityReportModal={() => setIsIntegrityReportModalOpen(true)} />}
+                    {view === 'map' && <MapView stations={visibleStations} selectedStationId={selectedStationId} onSelectStation={setSelectedStationId} onFindNearby={handleFindNearby} onOpenIncidentReportModal={() => setIsIncidentReportModalOpen(true)}/>}
+                    {view === 'list' && <StationList stations={stations} communes={communes} onSelectStationOnMap={handleSelectStationOnMap} />}
+                 </div>
             </main>
-            <footer className="text-center py-6 text-sm text-gray-500 border-t mt-8">
-                <p>&copy; {new Date().getFullYear()} Faso Carburant. Tous droits réservés.</p>
-                <p className="mt-1">Une initiative citoyenne pour la communauté.</p>
-            </footer>
 
-            {isMobileMenuOpen && (
-                <MobileMenu
-                    onClose={() => setIsMobileMenuOpen(false)}
-                    onNavigate={handleMobileNavigate}
-                    onOpenOwnerPortal={handleOpenOwnerPortalFromMobile}
+            {isOwnerFlowActive && <StationSelectorModal />}
+
+            {(managedStation || isAddingStation) && (
+                <OwnerPortal 
+                    station={isAddingStation ? undefined : managedStation!} 
+                    communes={communes}
+                    onClose={handleClosePortal} 
+                    onUpdateStatus={handleUpdateStationStatus}
+                    onSubmitForReview={isAddingStation ? handleAddNewStationRequest : (data) => handleSubmitForReview(managedStation!.id, data)}
                 />
             )}
 
-            {isOwnerFlowActive && !managedStation && <StationSelectorModal />}
-            {managedStation && (
-                <OwnerPortal
-                    station={managedStation}
-                    communes={communes}
-                    onClose={handleClosePortal}
-                    onUpdateStatus={handleUpdateStationStatus}
-                    onSubmitForReview={handleSubmitForReview}
+            {isMobileMenuOpen && <MobileMenu onClose={() => setIsMobileMenuOpen(false)} onNavigate={handleMobileNavigate} onOpenOwnerPortal={handleOpenOwnerPortalFromMobile} onOpenAdminPortal={handleOpenAdminPortalFromMobile} />}
+        
+            {isIntegrityReportModalOpen && (
+                <IntegrityReportModal 
+                    stations={visibleStations} 
+                    onClose={() => setIsIntegrityReportModalOpen(false)} 
+                    onSubmit={handleIntegrityReportSubmit}
                 />
+            )}
+
+             {isIncidentReportModalOpen && (
+                <IncidentReportModal
+                    stations={visibleStations}
+                    onClose={() => setIsIncidentReportModalOpen(false)}
+                    onSubmit={handleIncidentReportSubmit}
+                />
+            )}
+
+            {isAdminMode && (
+                <AdminPortal
+                    stations={stations}
+                    onClose={() => setIsAdminMode(false)}
+                    onApprove={handleApproveStation}
+                    onReject={handleRejectStation}
+                />
+            )}
+            
+            {toast && (
+                <div key={toast.key} className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-white py-2.5 px-6 rounded-full shadow-lg z-[100] animate-fade-in-up text-sm font-semibold">
+                    {toast.message}
+                </div>
             )}
         </div>
     );
