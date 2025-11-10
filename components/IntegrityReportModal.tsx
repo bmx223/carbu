@@ -218,15 +218,15 @@ export const IntegrityReportModal: React.FC<IntegrityReportModalProps> = ({ stat
                     </footer>
                 </form>
             </div>
-            <ConfirmationDialog
-                isOpen={isConfirming}
-                onClose={() => setIsConfirming(false)}
-                onConfirm={handleConfirmSubmit}
-                title="Confirmer le Signalement"
-                confirmText="Oui, envoyer"
-            >
-                <p>Veuillez vérifier les informations avant de soumettre :</p>
-                {reportToConfirm && (
+            {isConfirming && reportToConfirm && (
+                <ConfirmationDialog
+                    isOpen={isConfirming}
+                    onClose={() => setIsConfirming(false)}
+                    onConfirm={handleConfirmSubmit}
+                    title="Confirmer le Signalement"
+                    confirmText="Oui, envoyer"
+                >
+                    <p>Veuillez vérifier les informations avant de soumettre :</p>
                     <ul className="list-disc pl-5 mt-2 text-sm space-y-1">
                         <li>
                             <strong>Station :</strong> {stations.find(s => s.id === reportToConfirm.stationId)?.name}
@@ -241,8 +241,8 @@ export const IntegrityReportModal: React.FC<IntegrityReportModalProps> = ({ stat
                             <strong>Signalement :</strong> {reportToConfirm.isAnonymous ? 'Anonyme' : 'Non-anonyme'}
                         </li>
                     </ul>
-                )}
-            </ConfirmationDialog>
+                </ConfirmationDialog>
+            )}
         </>
     );
 };

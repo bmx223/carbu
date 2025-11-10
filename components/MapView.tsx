@@ -154,7 +154,7 @@ export const MapView: React.FC<MapViewProps> = ({ stations, selectedStationId, o
     const [searchTerm, setSearchTerm] = useState('');
     const [zoomLevel, setZoomLevel] = useState(3); // Zoom scale 1 (out) to 5 (in)
     const [availabilityFilter, setAvailabilityFilter] = useState<'all' | StationStatus.AVAILABLE>('all');
-    const [queueFilter, setQueueFilter] = useState<'all' | QueueLength.SHORT | QueueLength.MEDIUM>('all');
+    const [queueFilter, setQueueFilter] = useState<'all' | QueueLength.SHORT | QueueLength.MEDIUM | QueueLength.LONG>('all');
 
     const handleZoomIn = () => setZoomLevel(z => Math.min(z + 1, 5));
     const handleZoomOut = () => setZoomLevel(z => Math.max(z - 1, 1));
@@ -282,6 +282,7 @@ export const MapView: React.FC<MapViewProps> = ({ stations, selectedStationId, o
                             <FilterButton active={queueFilter === 'all'} onClick={() => setQueueFilter('all')}>Toutes</FilterButton>
                             <FilterButton active={queueFilter === QueueLength.SHORT} onClick={() => setQueueFilter(QueueLength.SHORT)}>Courte</FilterButton>
                             <FilterButton active={queueFilter === QueueLength.MEDIUM} onClick={() => setQueueFilter(QueueLength.MEDIUM)}>Moyenne</FilterButton>
+                            <FilterButton active={queueFilter === QueueLength.LONG} onClick={() => setQueueFilter(QueueLength.LONG)}>Longue</FilterButton>
                         </div>
                     </div>
                 </div>

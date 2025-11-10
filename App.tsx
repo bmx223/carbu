@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Station, StationStatus, QueueLength, FuelType, Report, Commune, IncidentType, IncidentReport, IntegrityReport } from './types';
 import { analyzeFuelTrends } from './services/geminiService';
-import { LogoIcon, MapPinIcon, ClockIcon, PlusCircleIcon, CheckBadgeIcon, ListIcon, MapIcon, CrosshairsIcon, FlagIcon, AlertIcon, DocumentTextIcon, ShieldCheckIcon, KeyIcon, UserShieldIcon } from './components/icons';
+import { LogoIcon, PlusCircleIcon, CheckBadgeIcon, KeyIcon, UserShieldIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { MapView } from './components/MapView';
 import { StationList } from './components/StationList';
@@ -19,30 +20,30 @@ const communes: Commune[] = [
 ];
 const initialStations: Station[] = [
   { id: 1, name: 'TotalEnergies ACI 2000', address: 'ACI 2000, Bamako', communeId: 4, communeName: 'Commune IV', location: { lat: 12.63, lon: -8.03 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true, [FuelType.DIESEL]: true }, queue: QueueLength.SHORT, queueSize: 10, lastUpdate: new Date(Date.now() - 15 * 60 * 1000), verified: true, imageUrl: 'https://pbs.twimg.com/media/FGo9n26XEAQiybC.jpg' },
-  { id: 2, name: 'Shell Badalabougou', address: 'Badalabougou, Bamako', communeId: 5, communeName: 'Commune V', location: { lat: 12.62, lon: -7.99 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true, [FuelType.DIESEL]: false }, queue: QueueLength.LONG, queueSize: 75, lastUpdate: new Date(Date.now() - 5 * 60 * 1000), imageUrl: 'https://fastly.4sqi.net/img/general/600x600/39369904_Jz7r13i2iO90J3b62l2c-4DV92YODEn-hs-NVT6rqiA.jpg' },
-  { id: 3, name: 'Oryx Hippodrome', address: 'Hippodrome, Bamako', communeId: 2, communeName: 'Commune II', location: { lat: 12.64, lon: -8.01 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.NONE, queueSize: 0, lastUpdate: new Date(Date.now() - 1 * 60 * 60 * 1000) },
+  { id: 2, name: 'Shell Badalabougou', address: 'Badalabougou, Bamako', communeId: 5, communeName: 'Commune V', location: { lat: 12.62, lon: -7.99 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true, [FuelType.DIESEL]: false }, queue: QueueLength.LONG, queueSize: 75, lastUpdate: new Date(Date.now() - 5 * 60 * 1000), imageUrl: 'https://fastly.4sqi.net/img/general/600x600/39369904_Jz7r13i2iO90J3b62l2c-4DV92YODEn-hs-NVT6rqiA.jpg', verified: true },
+  { id: 3, name: 'Oryx Hippodrome', address: 'Hippodrome, Bamako', communeId: 2, communeName: 'Commune II', location: { lat: 12.64, lon: -8.01 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.NONE, queueSize: 0, lastUpdate: new Date(Date.now() - 1 * 60 * 60 * 1000), verified: true },
   { id: 4, name: 'Star Oil Sotuba', address: 'Sotuba, Bamako', communeId: 1, communeName: 'Commune I', location: { lat: 12.65, lon: -7.95 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true, [FuelType.DIESEL]: true, [FuelType.KEROSENE]: true }, queue: QueueLength.MEDIUM, queueSize: 30, lastUpdate: new Date(Date.now() - 7 * 60 * 60 * 1000), verified: false },
-  { id: 5, name: 'BNDA Station Cité du Niger', address: 'Cité du Niger, Bamako', communeId: 1, communeName: 'Commune I', location: { lat: 12.66, lon: -8.02 }, status: StationStatus.CLOSED, fuelAvailability: {}, queue: QueueLength.NONE, queueSize: 0, lastUpdate: new Date(Date.now() - 4 * 60 * 60 * 1000) },
-  { id: 6, name: 'Total Médina Coura', address: 'Médina Coura, Bamako', communeId: 2, communeName: 'Commune II', location: { lat: 12.6398, lon: -8.0021 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true, [FuelType.DIESEL]: true }, queue: QueueLength.MEDIUM, queueSize: 25, lastUpdate: new Date(Date.now() - 25 * 60 * 1000) },
-  { id: 7, name: 'Shell Faladié', address: 'Faladié, Bamako', communeId: 6, communeName: 'Commune VI', location: { lat: 12.59, lon: -7.95 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.NONE, lastUpdate: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-  { id: 8, name: 'Total Niamakoro', address: 'Niamakoro, Bamako', communeId: 6, communeName: 'Commune VI', location: { lat: 12.58, lon: -7.97 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true, [FuelType.DIESEL]: true }, queue: QueueLength.SHORT, queueSize: 5, lastUpdate: new Date(Date.now() - 45 * 60 * 1000) },
-  { id: 9, name: 'Oryx Magnambougou', address: 'Magnambougou, Bamako', communeId: 6, communeName: 'Commune VI', location: { lat: 12.61, lon: -7.93 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.DIESEL]: true }, queue: QueueLength.MEDIUM, queueSize: 40, lastUpdate: new Date(Date.now() - 10 * 60 * 1000) },
-  { id: 10, name: 'Star Oil Lafiabougou', address: 'Lafiabougou, Bamako', communeId: 4, communeName: 'Commune IV', location: { lat: 12.62, lon: -8.04 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.NONE, lastUpdate: new Date(Date.now() - 3 * 60 * 60 * 1000) },
+  { id: 5, name: 'BNDA Station Cité du Niger', address: 'Cité du Niger, Bamako', communeId: 1, communeName: 'Commune I', location: { lat: 12.66, lon: -8.02 }, status: StationStatus.CLOSED, fuelAvailability: {}, queue: QueueLength.NONE, queueSize: 0, lastUpdate: new Date(Date.now() - 4 * 60 * 60 * 1000), verified: true },
+  { id: 6, name: 'Total Médina Coura', address: 'Médina Coura, Bamako', communeId: 2, communeName: 'Commune II', location: { lat: 12.6398, lon: -8.0021 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true, [FuelType.DIESEL]: true }, queue: QueueLength.MEDIUM, queueSize: 25, lastUpdate: new Date(Date.now() - 25 * 60 * 1000), verified: true },
+  { id: 7, name: 'Shell Faladié', address: 'Faladié, Bamako', communeId: 6, communeName: 'Commune VI', location: { lat: 12.59, lon: -7.95 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.NONE, lastUpdate: new Date(Date.now() - 2 * 60 * 60 * 1000), verified: true },
+  { id: 8, name: 'Total Niamakoro', address: 'Niamakoro, Bamako', communeId: 6, communeName: 'Commune VI', location: { lat: 12.58, lon: -7.97 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true, [FuelType.DIESEL]: true }, queue: QueueLength.SHORT, queueSize: 5, lastUpdate: new Date(Date.now() - 45 * 60 * 1000), verified: true },
+  { id: 9, name: 'Oryx Magnambougou', address: 'Magnambougou, Bamako', communeId: 6, communeName: 'Commune VI', location: { lat: 12.61, lon: -7.93 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.DIESEL]: true }, queue: QueueLength.MEDIUM, queueSize: 40, lastUpdate: new Date(Date.now() - 10 * 60 * 1000), verified: true },
+  { id: 10, name: 'Star Oil Lafiabougou', address: 'Lafiabougou, Bamako', communeId: 4, communeName: 'Commune IV', location: { lat: 12.62, lon: -8.04 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.NONE, lastUpdate: new Date(Date.now() - 3 * 60 * 60 * 1000), verified: true },
   // --- NOUVELLES STATIONS ---
   // COMMUNE I
-  { id: 11, name: 'Sygim énergie Boulkassoumbougou', address: 'Face à l\'hôtel montana', communeId: 1, communeName: 'Commune I', location: { lat: 12.65, lon: -7.98 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.LONG, queueSize: 60, lastUpdate: new Date() },
-  { id: 12, name: 'Sygim énergie Sotuba', address: 'Près de Sotelco', communeId: 1, communeName: 'Commune I', location: { lat: 12.66, lon: -7.94 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.LONG, queueSize: 80, lastUpdate: new Date() },
-  { id: 13, name: 'NDC Sotuba', address: 'Face cimetière', communeId: 1, communeName: 'Commune I', location: { lat: 12.655, lon: -7.955 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true }, queue: QueueLength.MEDIUM, queueSize: 20, lastUpdate: new Date() },
+  { id: 11, name: 'Sygim énergie Boulkassoumbougou', address: 'Face à l\'hôtel montana', communeId: 1, communeName: 'Commune I', location: { lat: 12.65, lon: -7.98 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.LONG, queueSize: 60, lastUpdate: new Date(), verified: true },
+  { id: 12, name: 'Sygim énergie Sotuba', address: 'Près de Sotelco', communeId: 1, communeName: 'Commune I', location: { lat: 12.66, lon: -7.94 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.LONG, queueSize: 80, lastUpdate: new Date(), verified: true },
+  { id: 13, name: 'NDC Sotuba', address: 'Face cimetière', communeId: 1, communeName: 'Commune I', location: { lat: 12.655, lon: -7.955 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true }, queue: QueueLength.MEDIUM, queueSize: 20, lastUpdate: new Date(), verified: true },
   // COMMUNE II
-  { id: 14, name: 'Pretromali Hippodrome II', address: 'Hippodrome II', communeId: 2, communeName: 'Commune II', location: { lat: 12.645, lon: -8.015 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.DIESEL]: true }, queue: QueueLength.SHORT, queueSize: 15, lastUpdate: new Date() },
-  { id: 15, name: 'Somayaf Zone Industrielle', address: 'Zone Industrielle et Bougouba', communeId: 2, communeName: 'Commune II', location: { lat: 12.63, lon: -8.00 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true }, queue: QueueLength.LONG, queueSize: 55, lastUpdate: new Date() },
+  { id: 14, name: 'Pretromali Hippodrome II', address: 'Hippodrome II', communeId: 2, communeName: 'Commune II', location: { lat: 12.645, lon: -8.015 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.DIESEL]: true }, queue: QueueLength.SHORT, queueSize: 15, lastUpdate: new Date(), verified: true },
+  { id: 15, name: 'Somayaf Zone Industrielle', address: 'Zone Industrielle et Bougouba', communeId: 2, communeName: 'Commune II', location: { lat: 12.63, lon: -8.00 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true }, queue: QueueLength.LONG, queueSize: 55, lastUpdate: new Date(), verified: true },
   // COMMUNE IV
-  { id: 16, name: 'Holding Service Sebenicoro', address: 'Sebenicoro', communeId: 4, communeName: 'Commune IV', location: { lat: 12.66, lon: -8.04 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.LONG, queueSize: 70, lastUpdate: new Date() },
-  { id: 17, name: 'Station Baraka Hamdallaye ACI', address: 'Hamdallaye ACI', communeId: 4, communeName: 'Commune IV', location: { lat: 12.64, lon: -8.03 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true, [FuelType.DIESEL]: true }, queue: QueueLength.SHORT, lastUpdate: new Date() },
+  { id: 16, name: 'Holding Service Sebenicoro', address: 'Sebenicoro', communeId: 4, communeName: 'Commune IV', location: { lat: 12.66, lon: -8.04 }, status: StationStatus.UNAVAILABLE, fuelAvailability: {}, queue: QueueLength.LONG, queueSize: 70, lastUpdate: new Date(), verified: true },
+  { id: 17, name: 'Station Baraka Hamdallaye ACI', address: 'Hamdallaye ACI', communeId: 4, communeName: 'Commune IV', location: { lat: 12.64, lon: -8.03 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true, [FuelType.DIESEL]: true }, queue: QueueLength.SHORT, lastUpdate: new Date(), verified: true },
   // COMMUNE V
-  { id: 18, name: 'Nietao Bacodjicoroni', address: 'Bacodjicoroni', communeId: 5, communeName: 'Commune V', location: { lat: 12.61, lon: -7.98 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true }, queue: QueueLength.MEDIUM, queueSize: 35, lastUpdate: new Date() },
-  { id: 19, name: 'Corridor vers lycée Kankou Moussa', address: 'Près du lycée Kankou Moussa', communeId: 5, communeName: 'Commune V', location: { lat: 12.615, lon: -7.985 }, status: StationStatus.CLOSED, fuelAvailability: {}, queue: QueueLength.NONE, lastUpdate: new Date() },
-  { id: 20, name: 'Holdings services Badalabougou', address: 'Badalabougou', communeId: 5, communeName: 'Commune V', location: { lat: 12.625, lon: -7.995 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.DIESEL]: true }, queue: QueueLength.SHORT, queueSize: 8, lastUpdate: new Date() },
+  { id: 18, name: 'Nietao Bacodjicoroni', address: 'Bacodjicoroni', communeId: 5, communeName: 'Commune V', location: { lat: 12.61, lon: -7.98 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.GASOLINE]: true }, queue: QueueLength.MEDIUM, queueSize: 35, lastUpdate: new Date(), verified: true },
+  { id: 19, name: 'Corridor vers lycée Kankou Moussa', address: 'Près du lycée Kankou Moussa', communeId: 5, communeName: 'Commune V', location: { lat: 12.615, lon: -7.985 }, status: StationStatus.CLOSED, fuelAvailability: {}, queue: QueueLength.NONE, lastUpdate: new Date(), verified: true },
+  { id: 20, name: 'Holdings services Badalabougou', address: 'Badalabougou', communeId: 5, communeName: 'Commune V', location: { lat: 12.625, lon: -7.995 }, status: StationStatus.AVAILABLE, fuelAvailability: { [FuelType.DIESEL]: true }, queue: QueueLength.SHORT, queueSize: 8, lastUpdate: new Date(), verified: true },
 ];
 
 const mockIncidents: IncidentReport[] = [
@@ -93,7 +94,8 @@ const MobileMenu: React.FC<{
 };
 
 const App: React.FC = () => {
-    const [stations, setStations] = useState<Station[]>(initialStations);
+    const [verifiedStations, setVerifiedStations] = useState<Station[]>([]);
+    const [unverifiedStations, setUnverifiedStations] = useState<Station[]>([]);
     const [view, setView] = useState<View>('dashboard');
     const [trendAnalysis, setTrendAnalysis] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -106,8 +108,22 @@ const App: React.FC = () => {
     const [isIntegrityReportModalOpen, setIsIntegrityReportModalOpen] = useState(false);
     const [integrityReports, setIntegrityReports] = useState<IntegrityReport[]>([]);
     const [isIncidentReportModalOpen, setIsIncidentReportModalOpen] = useState(false);
-    const [isAdminMode, setIsAdminMode] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
     const [toast, setToast] = useState<{ message: string; key: number } | null>(null);
+
+    useEffect(() => {
+        const verified: Station[] = [];
+        const unverified: Station[] = [];
+        initialStations.forEach(station => {
+            if (station.verified === false || station.status === StationStatus.PENDING_VALIDATION) {
+                unverified.push(station);
+            } else {
+                verified.push(station);
+            }
+        });
+        setVerifiedStations(verified);
+        setUnverifiedStations(unverified);
+    }, []);
 
     useEffect(() => {
         if (toast) {
@@ -124,7 +140,7 @@ const App: React.FC = () => {
         setIsAnalyzing(true);
         setTrendAnalysis(null);
         try {
-            const result = await analyzeFuelTrends(stations);
+            const result = await analyzeFuelTrends(verifiedStations);
             setTrendAnalysis(result);
         } catch (error) {
             console.error("Analysis failed:", error);
@@ -137,7 +153,7 @@ const App: React.FC = () => {
     const handleFindNearby = () => {
         // This is a mock function. In a real app, you'd use navigator.geolocation
         console.log("Recherche des stations à proximité...");
-        const availableStations = stations.filter(s => s.status === StationStatus.AVAILABLE);
+        const availableStations = verifiedStations.filter(s => s.status === StationStatus.AVAILABLE);
         if (availableStations.length > 0) {
             const randomStation = availableStations[Math.floor(Math.random() * availableStations.length)];
             setSelectedStationId(randomStation.id);
@@ -148,13 +164,11 @@ const App: React.FC = () => {
     };
 
     const handleUpdateStationStatus = (stationId: number, newStatus: Partial<Station>) => {
-        setStations(prevStations =>
-            prevStations.map(station =>
-                station.id === stationId
-                    ? { ...station, ...newStatus, lastUpdate: new Date() }
-                    : station
-            )
-        );
+        const updater = (station: Station) => station.id === stationId ? { ...station, ...newStatus, lastUpdate: new Date() } : station;
+        
+        setVerifiedStations(prev => prev.map(updater));
+        setUnverifiedStations(prev => prev.map(updater));
+        
         const time = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
         showToast(`Statut mis à jour avec succès à ${time}.`);
     };
@@ -186,7 +200,7 @@ const App: React.FC = () => {
             verified: false,
             imageUrl: newStationData.imageUrl,
         };
-        setStations(prev => [...prev, newStation]);
+        setUnverifiedStations(prev => [...prev, newStation]);
         showToast("Station soumise avec succès. Elle sera visible publiquement après vérification par notre équipe (Mode Admin).");
         handleClosePortal();
     };
@@ -232,7 +246,7 @@ const App: React.FC = () => {
     };
 
     const handleOpenAdminPortalFromMobile = () => {
-        setIsAdminMode(true);
+        setIsAdmin(!isAdmin);
         setIsMobileMenuOpen(false);
     };
 
@@ -241,19 +255,17 @@ const App: React.FC = () => {
         setView('map');
     };
 
-    const handleApproveStation = (stationId: number) => {
-        setStations(prev => prev.map(s => 
-            s.id === stationId 
-                ? { ...s, status: StationStatus.AVAILABLE, verified: true, lastUpdate: new Date() } 
-                : s
-        ));
+    const handleVerification = (stationId: number) => {
+        const stationToVerify = unverifiedStations.find(s => s.id === stationId);
+        if (stationToVerify) {
+            const verifiedStation = { ...stationToVerify, status: StationStatus.AVAILABLE, verified: true, lastUpdate: new Date() };
+            setUnverifiedStations(prev => prev.filter(s => s.id !== stationId));
+            setVerifiedStations(prev => [...prev, verifiedStation]);
+            showToast('Station vérifiée et publiée !');
+        }
     };
 
-    const handleRejectStation = (stationId: number) => {
-        setStations(prev => prev.filter(s => s.id !== stationId));
-    };
-
-    const visibleStations = stations.filter(s => s.status !== StationStatus.PENDING_VALIDATION);
+    const allStations = useMemo(() => [...verifiedStations, ...unverifiedStations], [verifiedStations, unverifiedStations]);
 
     const StationSelectorModal: React.FC = () => (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
@@ -273,7 +285,7 @@ const App: React.FC = () => {
                         </button>
                     </div>
                     <ul className="space-y-2">
-                        {visibleStations.map(station => (
+                        {verifiedStations.map(station => (
                             <li key={station.id}>
                                 <button
                                     onClick={() => { setManagedStation(station); setIsOwnerFlowActive(false); }}
@@ -296,13 +308,17 @@ const App: React.FC = () => {
     // Simple Header
     const Header = () => (
       <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-40">
-        <div className="flex items-center gap-3">
+        <button 
+          onClick={() => setView('dashboard')}
+          className="flex items-center gap-3 text-left transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-mali-green rounded-lg"
+          aria-label="Retour à la page d'accueil"
+        >
             <LogoIcon className="w-10 h-10" />
             <div>
                 <h1 className="text-xl font-bold text-gray-800">Faso Carburant</h1>
                 <p className="text-sm text-gray-500">La Boussole du Citoyen</p>
             </div>
-        </div>
+        </button>
         <nav className="hidden md:flex items-center gap-2">
             <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${view === 'dashboard' ? 'bg-mali-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Tableau de Bord</button>
             <button onClick={() => setView('map')} className={`px-4 py-2 rounded-lg font-semibold transition-colors ${view === 'map' ? 'bg-mali-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Carte</button>
@@ -312,7 +328,7 @@ const App: React.FC = () => {
                 <KeyIcon className="w-5 h-5"/>
                 Espace Propriétaire
             </button>
-             <button onClick={() => setIsAdminMode(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-blue-800 bg-blue-100 hover:bg-blue-200 transition-colors">
+             <button onClick={() => setIsAdmin(!isAdmin)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${isAdmin ? 'bg-blue-600 text-white' : 'text-blue-800 bg-blue-100 hover:bg-blue-200'}`}>
                 <UserShieldIcon className="w-5 h-5"/>
                 Mode Admin
             </button>
@@ -330,9 +346,37 @@ const App: React.FC = () => {
             <Header />
             <main>
                  <div className="container mx-auto px-4 py-6">
-                    {view === 'dashboard' && <Dashboard stations={visibleStations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis} incidentReports={incidentReports} onOpenIntegrityReportModal={() => setIsIntegrityReportModalOpen(true)} />}
-                    {view === 'map' && <MapView stations={visibleStations} selectedStationId={selectedStationId} onSelectStation={setSelectedStationId} onFindNearby={handleFindNearby} onOpenIncidentReportModal={() => setIsIncidentReportModalOpen(true)}/>}
-                    {view === 'list' && <StationList stations={stations} communes={communes} onSelectStationOnMap={handleSelectStationOnMap} />}
+                    {view === 'dashboard' && <Dashboard stations={verifiedStations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis} incidentReports={incidentReports} onOpenIntegrityReportModal={() => setIsIntegrityReportModalOpen(true)} />}
+                    {view === 'map' && <MapView stations={verifiedStations} selectedStationId={selectedStationId} onSelectStation={setSelectedStationId} onFindNearby={handleFindNearby} onOpenIncidentReportModal={() => setIsIncidentReportModalOpen(true)}/>}
+                    {view === 'list' && <StationList stations={allStations} communes={communes} onSelectStationOnMap={handleSelectStationOnMap} />}
+
+                    {isAdmin && (
+                        <div className="mt-12 p-6 bg-mali-yellow/10 rounded-xl shadow-inner animate-fade-in-up">
+                            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                                <CheckBadgeIcon className="w-6 h-6 mr-2 text-mali-green" /> Espace Administration : Stations en Attente ({unverifiedStations.length})
+                            </h2>
+                            {unverifiedStations.length === 0 ? (
+                                <p className="text-gray-600">Aucune nouvelle station en attente de vérification.</p>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-4">
+                                    {unverifiedStations.map(station => (
+                                        <div key={station.id} className="p-4 bg-white rounded-lg shadow flex flex-col sm:flex-row justify-between sm:items-center gap-4 border border-mali-yellow">
+                                            <div>
+                                                <p className="font-semibold text-lg">{station.name} <span className="text-sm font-normal text-gray-500">({station.communeName})</span></p>
+                                                <p className="text-sm text-gray-600">{station.address}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleVerification(station.id)}
+                                                className="bg-mali-green text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors w-full sm:w-auto"
+                                            >
+                                                Valider et Publier
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                  </div>
             </main>
 
@@ -352,7 +396,7 @@ const App: React.FC = () => {
         
             {isIntegrityReportModalOpen && (
                 <IntegrityReportModal 
-                    stations={visibleStations} 
+                    stations={verifiedStations} 
                     onClose={() => setIsIntegrityReportModalOpen(false)} 
                     onSubmit={handleIntegrityReportSubmit}
                 />
@@ -360,18 +404,9 @@ const App: React.FC = () => {
 
              {isIncidentReportModalOpen && (
                 <IncidentReportModal
-                    stations={visibleStations}
+                    stations={verifiedStations}
                     onClose={() => setIsIncidentReportModalOpen(false)}
                     onSubmit={handleIncidentReportSubmit}
-                />
-            )}
-
-            {isAdminMode && (
-                <AdminPortal
-                    stations={stations}
-                    onClose={() => setIsAdminMode(false)}
-                    onApprove={handleApproveStation}
-                    onReject={handleRejectStation}
                 />
             )}
             
