@@ -55,6 +55,20 @@ const mockIncidents: IncidentReport[] = [
 
 type View = 'dashboard' | 'map' | 'list' | 'admin';
 
+// Helper function for distance calculation
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const deg2rad = (deg: number) => deg * (Math.PI / 180);
+    const R = 6371; // Radius of the Earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
+};
+
 const MobileMenu: React.FC<{
     onClose: () => void;
     onNavigate: (view: View) => void;
@@ -133,6 +147,8 @@ const App: React.FC = () => {
     const [toast, setToast] = useState<{ message: string; key: number } | null>(null);
     const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+    const [userLocation, setUserLocation] = useState<{ lat: number, lon: number } | null>(null);
+    const [isLocating, setIsLocating] = useState(false);
 
     useEffect(() => {
         const verified: Station[] = [];
@@ -174,16 +190,59 @@ const App: React.FC = () => {
     };
 
     const handleFindNearby = () => {
-        // This is a mock function. In a real app, you'd use navigator.geolocation
-        console.log("Recherche des stations à proximité...");
-        const availableStations = verifiedStations.filter(s => s.status === StationStatus.AVAILABLE);
-        if (availableStations.length > 0) {
-            const randomStation = availableStations[Math.floor(Math.random() * availableStations.length)];
-            setSelectedStationId(randomStation.id);
-            setView('map');
-        } else {
-            alert("Désolé, aucune station disponible n'a été trouvée.");
+        if (!navigator.geolocation) {
+            showToast("La géolocalisation n'est pas supportée par votre navigateur.");
+            return;
         }
+
+        setIsLocating(true);
+        showToast("Recherche de votre position...");
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                setUserLocation({ lat: latitude, lon: longitude });
+
+                const availableStations = verifiedStations.filter(s => s.status === StationStatus.AVAILABLE);
+                if (availableStations.length === 0) {
+                    showToast("Désolé, aucune station disponible n'a été trouvée.");
+                    setIsLocating(false);
+                    return;
+                }
+
+                let closestStation: Station | null = null;
+                let minDistance = Infinity;
+
+                availableStations.forEach(station => {
+                    const distance = getDistance(latitude, longitude, station.location.lat, station.location.lon);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestStation = station;
+                    }
+                });
+
+                if (closestStation) {
+                    setSelectedStationId(closestStation.id);
+                    setView('map');
+                    showToast(`Station la plus proche trouvée : ${closestStation.name} (${minDistance.toFixed(1)} km)`);
+                } else {
+                    showToast("Impossible de trouver une station proche.");
+                }
+                setIsLocating(false);
+            },
+            (error) => {
+                console.error("Geolocation error:", error);
+                let message = "Erreur de géolocalisation.";
+                if (error.code === error.PERMISSION_DENIED) {
+                    message = "L'accès à votre position a été refusé.";
+                } else if (error.code === error.POSITION_UNAVAILABLE) {
+                    message = "Votre position n'est pas disponible.";
+                }
+                showToast(message);
+                setIsLocating(false);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
     };
 
     const handleUpdateStationStatus = (stationId: number, newStatus: Partial<Station>) => {
@@ -414,15 +473,15 @@ const App: React.FC = () => {
     const renderContent = () => {
         switch (view) {
             case 'dashboard':
-                return <Dashboard stations={verifiedStations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis} incidentReports={incidentReports} onOpenIntegrityReportModal={() => setIsIntegrityReportModalOpen(true)} />;
+                return <Dashboard stations={verifiedStations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} isLocating={isLocating} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis} incidentReports={incidentReports} onOpenIntegrityReportModal={() => setIsIntegrityReportModalOpen(true)} />;
             case 'map':
-                return <MapView stations={verifiedStations} selectedStationId={selectedStationId} onSelectStation={setSelectedStationId} onFindNearby={handleFindNearby} onOpenIncidentReportModal={() => setIsIncidentReportModalOpen(true)}/>;
+                return <MapView stations={verifiedStations} selectedStationId={selectedStationId} userLocation={userLocation} isLocating={isLocating} onSelectStation={setSelectedStationId} onFindNearby={handleFindNearby} onOpenIncidentReportModal={() => setIsIncidentReportModalOpen(true)}/>;
             case 'list':
                 return <StationList stations={allStations} communes={communes} onSelectStationOnMap={handleSelectStationOnMap} />;
             case 'admin':
                 if (!isAdminAuthenticated) {
                     // This is a fallback, user should be redirected before this happens
-                    return <Dashboard stations={verifiedStations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis} incidentReports={incidentReports} onOpenIntegrityReportModal={() => setIsIntegrityReportModalOpen(true)} />;
+                    return <Dashboard stations={verifiedStations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} isLocating={isLocating} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis} incidentReports={incidentReports} onOpenIntegrityReportModal={() => setIsIntegrityReportModalOpen(true)} />;
                 }
                 return <AdminPortal 
                             allStations={allStations}

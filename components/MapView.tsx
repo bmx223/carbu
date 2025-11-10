@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Station, StationStatus, QueueLength } from '../types';
 import { MapPinIcon, ClockIcon, CrosshairsIcon, SearchIcon, PlusIcon, MinusIcon, FlagIcon } from './icons';
@@ -6,6 +7,8 @@ import { MapPinIcon, ClockIcon, CrosshairsIcon, SearchIcon, PlusIcon, MinusIcon,
 interface MapViewProps {
     stations: Station[];
     selectedStationId: number | null;
+    userLocation: { lat: number; lon: number } | null;
+    isLocating: boolean;
     onSelectStation: (id: number | null) => void;
     onFindNearby: () => void;
     onOpenIncidentReportModal: () => void;
@@ -60,6 +63,22 @@ const formatTimeAgo = (date: Date): string => {
     if (hours < 24) return `Il y a ${hours} h`;
     const days = Math.floor(hours / 24);
     return `Il y a ${days} j`;
+};
+
+const UserLocationPin: React.FC<{ location: { lat: number; lon: number } }> = ({ location }) => {
+    const { top, left } = normalizeCoords(location.lat, location.lon);
+    return (
+        <div
+            className="absolute transform -translate-x-1/2 -translate-y-1/2 z-10"
+            style={{ top, left }}
+            title="Votre position"
+        >
+            <div className="relative w-6 h-6">
+                <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping"></div>
+                <div className="absolute inset-2 bg-blue-500 border-2 border-white rounded-full shadow-lg"></div>
+            </div>
+        </div>
+    );
 };
 
 const StationPin: React.FC<{ station: Station; onSelect: () => void; isHighlighted: boolean }> = ({ station, onSelect, isHighlighted }) => {
@@ -150,7 +169,7 @@ const FilterButton: React.FC<{ active: boolean; onClick: () => void; children: R
 );
 
 
-export const MapView: React.FC<MapViewProps> = ({ stations, selectedStationId, onSelectStation, onFindNearby, onOpenIncidentReportModal }) => {
+export const MapView: React.FC<MapViewProps> = ({ stations, selectedStationId, userLocation, isLocating, onSelectStation, onFindNearby, onOpenIncidentReportModal }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [zoomLevel, setZoomLevel] = useState(3); // Zoom scale 1 (out) to 5 (in)
     const [availabilityFilter, setAvailabilityFilter] = useState<'all' | StationStatus.AVAILABLE>('all');
@@ -299,6 +318,8 @@ export const MapView: React.FC<MapViewProps> = ({ stations, selectedStationId, o
                 const station = item as Station; // Type assertion for Station
                 return <StationPin key={station.id} station={station} onSelect={() => onSelectStation(station.id)} isHighlighted={station.id === selectedStationId} />;
             })}
+            
+            {userLocation && <UserLocationPin location={userLocation} />}
 
             {selectedStationForPopup && <InfoPopup station={selectedStationForPopup} onClose={() => onSelectStation(null)} />}
             
@@ -312,10 +333,18 @@ export const MapView: React.FC<MapViewProps> = ({ stations, selectedStationId, o
             
             <button
                 onClick={onFindNearby}
-                className="absolute bottom-4 right-4 flex items-center gap-2 bg-white text-gray-800 font-bold p-3 sm:py-2 sm:px-4 rounded-full shadow-2xl border-2 border-transparent hover:border-mali-green transition-all transform hover:scale-105 z-10"
+                disabled={isLocating}
+                className="absolute bottom-4 right-4 flex items-center gap-2 bg-white text-gray-800 font-bold p-3 sm:py-2 sm:px-4 rounded-full shadow-2xl border-2 border-transparent hover:border-mali-green transition-all transform hover:scale-105 z-10 disabled:bg-gray-300 disabled:cursor-wait"
             >
-                <CrosshairsIcon className="w-5 h-5"/>
-                <span className="hidden sm:inline">Près de moi</span>
+                {isLocating ? (
+                     <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                ) : (
+                    <CrosshairsIcon className="w-5 h-5"/>
+                )}
+                <span className="hidden sm:inline">{isLocating ? "Localisation..." : "Près de moi"}</span>
             </button>
         </div>
     );
