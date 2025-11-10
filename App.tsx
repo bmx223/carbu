@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Station, StationStatus, QueueLength, FuelType, Report, Commune, IncidentType, IncidentReport, IntegrityReport } from './types';
 import { analyzeFuelTrends } from './services/geminiService';
-import { LogoIcon, PlusCircleIcon, CheckBadgeIcon, KeyIcon, UserShieldIcon } from './components/icons';
+import { LogoIcon, PlusCircleIcon, KeyIcon, UserShieldIcon, ArrowRightOnRectangleIcon } from './components/icons';
 import { Dashboard } from './components/Dashboard';
 import { MapView } from './components/MapView';
 import { StationList } from './components/StationList';
@@ -11,6 +11,7 @@ import { IntegrityReportModal } from './components/IntegrityReportModal';
 import { IncidentReportModal } from './components/IncidentReportModal';
 import { OwnerPortal } from "./OwnerPortal";
 import { AdminPortal } from './components/AdminPortal';
+import { AdminLoginModal } from './components/AdminLoginModal';
 
 // Mock Data
 const communes: Commune[] = [
@@ -52,14 +53,16 @@ const mockIncidents: IncidentReport[] = [
     { id: 3, stationId: 15, incidentType: IncidentType.DISPUTE, description: "Altercation entre plusieurs automobilistes.", reportedAt: new Date(Date.now() - 1 * 60 * 60 * 1000) }
 ];
 
-type View = 'dashboard' | 'map' | 'list';
+type View = 'dashboard' | 'map' | 'list' | 'admin';
 
 const MobileMenu: React.FC<{
     onClose: () => void;
     onNavigate: (view: View) => void;
     onOpenOwnerPortal: () => void;
-    onOpenAdminPortal: () => void;
-}> = ({ onClose, onNavigate, onOpenOwnerPortal, onOpenAdminPortal }) => {
+    onAdminClick: () => void;
+    onAdminLogout: () => void;
+    isAdminAuthenticated: boolean;
+}> = ({ onClose, onNavigate, onOpenOwnerPortal, onAdminClick, onAdminLogout, isAdminAuthenticated }) => {
     return (
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true"></div>
@@ -80,13 +83,32 @@ const MobileMenu: React.FC<{
                         <KeyIcon className="w-6 h-6"/>
                         Espace Propriétaire
                     </button>
-                     <button
-                        onClick={onOpenAdminPortal}
-                        className="flex items-center gap-3 text-left text-lg font-semibold text-blue-800 bg-blue-200 p-3 rounded-lg transition-colors hover:bg-blue-300"
-                    >
-                        <UserShieldIcon className="w-6 h-6"/>
-                        Mode Admin
-                    </button>
+                    {isAdminAuthenticated ? (
+                        <>
+                            <button
+                                onClick={() => onNavigate('admin')}
+                                className="flex items-center gap-3 text-left text-lg font-semibold text-blue-800 bg-blue-200 p-3 rounded-lg transition-colors hover:bg-blue-300"
+                            >
+                                <UserShieldIcon className="w-6 h-6"/>
+                                Portail Admin
+                            </button>
+                             <button
+                                onClick={onAdminLogout}
+                                className="flex items-center gap-3 text-left text-lg font-semibold text-red-800 bg-red-100 p-3 rounded-lg transition-colors hover:bg-red-200"
+                            >
+                                <ArrowRightOnRectangleIcon className="w-6 h-6"/>
+                                Déconnexion
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            onClick={onAdminClick}
+                            className="flex items-center gap-3 text-left text-lg font-semibold text-blue-800 bg-blue-200 p-3 rounded-lg transition-colors hover:bg-blue-300"
+                        >
+                            <UserShieldIcon className="w-6 h-6"/>
+                            Mode Admin
+                        </button>
+                    )}
                 </nav>
             </div>
         </div>
@@ -108,8 +130,9 @@ const App: React.FC = () => {
     const [isIntegrityReportModalOpen, setIsIntegrityReportModalOpen] = useState(false);
     const [integrityReports, setIntegrityReports] = useState<IntegrityReport[]>([]);
     const [isIncidentReportModalOpen, setIsIncidentReportModalOpen] = useState(false);
-    const [isAdmin, setIsAdmin] = useState(false);
     const [toast, setToast] = useState<{ message: string; key: number } | null>(null);
+    const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     useEffect(() => {
         const verified: Station[] = [];
@@ -236,6 +259,10 @@ const App: React.FC = () => {
     };
 
     const handleMobileNavigate = (targetView: View) => {
+        if (targetView === 'admin' && !isAdminAuthenticated) {
+            handleAdminClick();
+            return;
+        }
         setView(targetView);
         setIsMobileMenuOpen(false);
     };
@@ -245,9 +272,9 @@ const App: React.FC = () => {
         setIsMobileMenuOpen(false);
     };
 
-    const handleOpenAdminPortalFromMobile = () => {
-        setIsAdmin(!isAdmin);
+    const handleAdminClickFromMobile = () => {
         setIsMobileMenuOpen(false);
+        handleAdminClick();
     };
 
     const handleSelectStationOnMap = (stationId: number) => {
@@ -255,13 +282,45 @@ const App: React.FC = () => {
         setView('map');
     };
 
-    const handleVerification = (stationId: number) => {
+    const handleApproveStation = (stationId: number) => {
         const stationToVerify = unverifiedStations.find(s => s.id === stationId);
         if (stationToVerify) {
             const verifiedStation = { ...stationToVerify, status: StationStatus.AVAILABLE, verified: true, lastUpdate: new Date() };
             setUnverifiedStations(prev => prev.filter(s => s.id !== stationId));
             setVerifiedStations(prev => [...prev, verifiedStation]);
             showToast('Station vérifiée et publiée !');
+        }
+    };
+
+    const handleRejectStation = (stationId: number) => {
+        setUnverifiedStations(prev => prev.filter(s => s.id !== stationId));
+        showToast('Soumission de station rejetée.');
+    };
+    
+    const handleAdminLogin = (password: string): boolean => {
+        // In a real app, this would be a secure API call.
+        if (password === 'admin2024') {
+            setIsAdminAuthenticated(true);
+            setIsAuthModalOpen(false);
+            setView('admin');
+            showToast("Authentification réussie. Bienvenue !");
+            return true;
+        }
+        return false;
+    };
+
+    const handleAdminLogout = () => {
+        setIsAdminAuthenticated(false);
+        setView('dashboard');
+        setIsMobileMenuOpen(false);
+        showToast("Vous avez été déconnecté.");
+    };
+
+    const handleAdminClick = () => {
+        if (isAdminAuthenticated) {
+            setView('admin');
+        } else {
+            setIsAuthModalOpen(true);
         }
     };
 
@@ -305,7 +364,6 @@ const App: React.FC = () => {
         </div>
     );
 
-    // Simple Header
     const Header = () => (
       <header className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-40">
         <button 
@@ -328,10 +386,22 @@ const App: React.FC = () => {
                 <KeyIcon className="w-5 h-5"/>
                 Espace Propriétaire
             </button>
-             <button onClick={() => setIsAdmin(!isAdmin)} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${isAdmin ? 'bg-blue-600 text-white' : 'text-blue-800 bg-blue-100 hover:bg-blue-200'}`}>
-                <UserShieldIcon className="w-5 h-5"/>
-                Mode Admin
-            </button>
+             {isAdminAuthenticated ? (
+                <>
+                    <button onClick={() => setView('admin')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${view === 'admin' ? 'bg-blue-600 text-white' : 'text-blue-800 bg-blue-100 hover:bg-blue-200'}`}>
+                        <UserShieldIcon className="w-5 h-5"/>
+                        Portail Admin
+                    </button>
+                     <button onClick={handleAdminLogout} className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-red-800 bg-red-100 hover:bg-red-200 transition-colors">
+                        <ArrowRightOnRectangleIcon className="w-5 h-5"/>
+                    </button>
+                </>
+             ) : (
+                <button onClick={handleAdminClick} className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-blue-800 bg-blue-100 hover:bg-blue-200 transition-colors">
+                    <UserShieldIcon className="w-5 h-5"/>
+                    Mode Admin
+                </button>
+             )}
         </nav>
         <div className="md:hidden">
             <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 rounded-md text-gray-600 hover:bg-gray-100">
@@ -341,42 +411,38 @@ const App: React.FC = () => {
       </header>
     );
 
+    const renderContent = () => {
+        switch (view) {
+            case 'dashboard':
+                return <Dashboard stations={verifiedStations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis} incidentReports={incidentReports} onOpenIntegrityReportModal={() => setIsIntegrityReportModalOpen(true)} />;
+            case 'map':
+                return <MapView stations={verifiedStations} selectedStationId={selectedStationId} onSelectStation={setSelectedStationId} onFindNearby={handleFindNearby} onOpenIncidentReportModal={() => setIsIncidentReportModalOpen(true)}/>;
+            case 'list':
+                return <StationList stations={allStations} communes={communes} onSelectStationOnMap={handleSelectStationOnMap} />;
+            case 'admin':
+                if (!isAdminAuthenticated) {
+                    // This is a fallback, user should be redirected before this happens
+                    return <Dashboard stations={verifiedStations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis} incidentReports={incidentReports} onOpenIntegrityReportModal={() => setIsIntegrityReportModalOpen(true)} />;
+                }
+                return <AdminPortal 
+                            allStations={allStations}
+                            pendingStations={unverifiedStations}
+                            integrityReports={integrityReports}
+                            incidentReports={incidentReports}
+                            onApprove={handleApproveStation}
+                            onReject={handleRejectStation}
+                       />;
+            default:
+                return null;
+        }
+    }
+
     return (
         <div className="font-sans bg-gray-50 min-h-screen">
             <Header />
             <main>
                  <div className="container mx-auto px-4 py-6">
-                    {view === 'dashboard' && <Dashboard stations={verifiedStations} communes={communes} onNavigateToList={() => setView('list')} onNavigateToMap={() => setView('map')} onFindNearby={handleFindNearby} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} trendAnalysis={trendAnalysis} incidentReports={incidentReports} onOpenIntegrityReportModal={() => setIsIntegrityReportModalOpen(true)} />}
-                    {view === 'map' && <MapView stations={verifiedStations} selectedStationId={selectedStationId} onSelectStation={setSelectedStationId} onFindNearby={handleFindNearby} onOpenIncidentReportModal={() => setIsIncidentReportModalOpen(true)}/>}
-                    {view === 'list' && <StationList stations={allStations} communes={communes} onSelectStationOnMap={handleSelectStationOnMap} />}
-
-                    {isAdmin && (
-                        <div className="mt-12 p-6 bg-mali-yellow/10 rounded-xl shadow-inner animate-fade-in-up">
-                            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center">
-                                <CheckBadgeIcon className="w-6 h-6 mr-2 text-mali-green" /> Espace Administration : Stations en Attente ({unverifiedStations.length})
-                            </h2>
-                            {unverifiedStations.length === 0 ? (
-                                <p className="text-gray-600">Aucune nouvelle station en attente de vérification.</p>
-                            ) : (
-                                <div className="grid grid-cols-1 gap-4">
-                                    {unverifiedStations.map(station => (
-                                        <div key={station.id} className="p-4 bg-white rounded-lg shadow flex flex-col sm:flex-row justify-between sm:items-center gap-4 border border-mali-yellow">
-                                            <div>
-                                                <p className="font-semibold text-lg">{station.name} <span className="text-sm font-normal text-gray-500">({station.communeName})</span></p>
-                                                <p className="text-sm text-gray-600">{station.address}</p>
-                                            </div>
-                                            <button
-                                                onClick={() => handleVerification(station.id)}
-                                                className="bg-mali-green text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors w-full sm:w-auto"
-                                            >
-                                                Valider et Publier
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    {renderContent()}
                  </div>
             </main>
 
@@ -392,7 +458,16 @@ const App: React.FC = () => {
                 />
             )}
 
-            {isMobileMenuOpen && <MobileMenu onClose={() => setIsMobileMenuOpen(false)} onNavigate={handleMobileNavigate} onOpenOwnerPortal={handleOpenOwnerPortalFromMobile} onOpenAdminPortal={handleOpenAdminPortalFromMobile} />}
+            {isMobileMenuOpen && (
+                <MobileMenu 
+                    onClose={() => setIsMobileMenuOpen(false)} 
+                    onNavigate={handleMobileNavigate} 
+                    onOpenOwnerPortal={handleOpenOwnerPortalFromMobile}
+                    onAdminClick={handleAdminClickFromMobile}
+                    onAdminLogout={handleAdminLogout}
+                    isAdminAuthenticated={isAdminAuthenticated}
+                />
+            )}
         
             {isIntegrityReportModalOpen && (
                 <IntegrityReportModal 
@@ -410,6 +485,13 @@ const App: React.FC = () => {
                 />
             )}
             
+            {isAuthModalOpen && (
+                <AdminLoginModal 
+                    onClose={() => setIsAuthModalOpen(false)}
+                    onLogin={handleAdminLogin}
+                />
+            )}
+
             {toast && (
                 <div key={toast.key} className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-white py-2.5 px-6 rounded-full shadow-lg z-[100] animate-fade-in-up text-sm font-semibold">
                     {toast.message}

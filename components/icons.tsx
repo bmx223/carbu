@@ -159,3 +159,9 @@ export const BuildingStorefrontIcon: React.FC<{ className?: string }> = ({ class
         <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5A.75.75 0 0 1 14.25 12h.75c.414 0 .75.336.75.75v7.5m0 0v-7.5m0 7.5h-1.5m1.5 0v-7.5m0 7.5h-1.5m0 0h.01M4.5 21v-7.5A.75.75 0 0 1 5.25 12h.75c.414 0 .75.336.75.75v7.5m0 0v-7.5m0 7.5H4.5m0 0h.01M19.5 21v-7.5a.75.75 0 0 0-.75-.75h-.75a.75.75 0 0 0-.75.75v7.5m0 0v-7.5m0 7.5h1.5m0 0h-.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
     </svg>
 );
+
+export const ArrowRightOnRectangleIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+    </svg>
+);
